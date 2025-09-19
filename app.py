@@ -55,9 +55,10 @@ def create_app(config_name=None):
     from routes.main import main_bp
     app.register_blueprint(main_bp)
     
-    # Initialize database tables
+    # Initialize database tables and sample data
     with app.app_context():
-        db.create_all()
+        from init_sample_data import init_sample_data
+        init_sample_data()
     
     return app
 
