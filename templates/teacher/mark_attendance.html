@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}Mark Attendance - {{ lecture.title }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.lectures') }}">Lectures</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.lecture_detail', lecture_id=lecture.id) }}">{{ lecture.title }}</a></li>
+                <li class="breadcrumb-item active">Mark Attendance</li>
+            </ol>
+        </nav>
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-check"></i> Mark Attendance</h2>
+                <p class="text-muted">{{ lecture.title }} - {{ lecture.course.code }}</p>
+            </div>
+            <div>
+                <button class="btn btn-success" onclick="markAllPresent()">
+                    <i class="fas fa-check-double"></i> Mark All Present
+                </button>
+                <button class="btn btn-warning" onclick="markAllAbsent()">
+                    <i class="fas fa-times"></i> Mark All Absent
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3 id="totalStudents">{{ enrollments|length }}</h3>
+                <p class="mb-0">Total Students</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3 id="presentCount">0</h3>
+                <p class="mb-0">Present</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3 id="lateCount">0</h3>
+                <p class="mb-0">Late</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h3 id="absentCount">{{ enrollments|length }}</h3>
+                <p class="mb-0">Absent</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-users"></i> Student List</h5>
+                <div>
+                    <button class="btn btn-primary" onclick="saveAttendance()">
+                        <i class="fas fa-save"></i> Save All Changes
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Student ID</th>
+                                <th>Status</th>
+                                <th>Auto-marked</th>
+                                <th>Location</th>
+                                <th>Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for enrollment in enrollments %}
+                            {% set attendance = attendance_dict.get(enrollment.student.id) %}
+                            <tr data-student-id="{{ enrollment.student.id }}">
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3">
+                                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                {{ enrollment.student.first_name[0] }}{{ enrollment.student.last_name[0] }}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <strong>{{ enrollment.student.full_name }}</strong>
+                                            <br><small class="text-muted">{{ enrollment.student.email }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{{ enrollment.student.student_id }}</td>
+                                <td>
+                                    <select class="form-select form-select-sm attendance-status" 
+                                            data-student-id="{{ enrollment.student.id }}"
+                                            onchange="updateAttendanceStatus(this)">
+                                        <option value="absent" {{ 'selected' if not attendance or attendance.status == 'absent' else '' }}>Absent</option>
+                                        <option value="present" {{ 'selected' if attendance and attendance.status == 'present' else '' }}>Present</option>
+                                        <option value="late" {{ 'selected' if attendance and attendance.status == 'late' else '' }}>Late</option>
+                                        <option value="excused" {{ 'selected' if attendance and attendance.status == 'excused' else '' }}>Excused</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    {% if attendance and attendance.auto_marked %}
+                                        <span class="badge bg-info">Auto</span>
+                                    {% elif attendance %}
+                                        <span class="badge bg-secondary">Manual</span>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if attendance and attendance.marked_latitude and attendance.marked_longitude %}
+                                        <small>
+                                            {{ "%.4f"|format(attendance.marked_latitude) }}, {{ "%.4f"|format(attendance.marked_longitude) }}
+                                            {% if attendance.distance_from_lecture %}
+                                                <br>{{ "%.1f"|format(attendance.distance_from_lecture) }}m away
+                                            {% endif %}
+                                        </small>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <input type="text" class="form-control form-control-sm attendance-notes" 
+                                           data-student-id="{{ enrollment.student.id }}"
+                                           value="{{ attendance.notes if attendance else '' }}" 
+                                           placeholder="Add notes...">
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-outline-success" 
+                                                onclick="setStatus({{ enrollment.student.id }}, 'present')">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                onclick="setStatus({{ enrollment.student.id }}, 'absent')">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let attendanceData = {};
+
+// Initialize attendance data
+document.addEventListener('DOMContentLoaded', function() {
+    updateCounts();
+});
+
+function updateAttendanceStatus(selectElement) {
+    const studentId = selectElement.getAttribute('data-student-id');
+    const status = selectElement.value;
+    
+    if (!attendanceData[studentId]) {
+        attendanceData[studentId] = {};
+    }
+    attendanceData[studentId].status = status;
+    
+    updateCounts();
+}
+
+function setStatus(studentId, status) {
+    const selectElement = document.querySelector(`select[data-student-id="${studentId}"]`);
+    selectElement.value = status;
+    updateAttendanceStatus(selectElement);
+}
+
+function markAllPresent() {
+    if (confirm('Mark all students as present?')) {
+        document.querySelectorAll('.attendance-status').forEach(select => {
+            select.value = 'present';
+            updateAttendanceStatus(select);
+        });
+    }
+}
+
+function markAllAbsent() {
+    if (confirm('Mark all students as absent?')) {
+        document.querySelectorAll('.attendance-status').forEach(select => {
+            select.value = 'absent';
+            updateAttendanceStatus(select);
+        });
+    }
+}
+
+function updateCounts() {
+    let presentCount = 0;
+    let lateCount = 0;
+    let absentCount = 0;
+    
+    document.querySelectorAll('.attendance-status').forEach(select => {
+        const status = select.value;
+        if (status === 'present') presentCount++;
+        else if (status === 'late') lateCount++;
+        else if (status === 'absent') absentCount++;
+    });
+    
+    document.getElementById('presentCount').textContent = presentCount;
+    document.getElementById('lateCount').textContent = lateCount;
+    document.getElementById('absentCount').textContent = absentCount;
+}
+
+function saveAttendance() {
+    // Collect all attendance data
+    const updates = [];
+    
+    document.querySelectorAll('.attendance-status').forEach(select => {
+        const studentId = select.getAttribute('data-student-id');
+        const status = select.value;
+        const notesInput = document.querySelector(`.attendance-notes[data-student-id="${studentId}"]`);
+        const notes = notesInput ? notesInput.value : '';
+        
+        updates.push({
+            student_id: parseInt(studentId),
+            status: status,
+            notes: notes
+        });
+    });
+    
+    // Send to server
+    fetch(`/teacher/lecture/{{ lecture.id }}/attendance`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            lecture_id: {{ lecture.id }},
+            updates: updates
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            alert('Attendance saved successfully!');
+            window.location.href = "{{ url_for('teacher.lecture_detail', lecture_id=lecture.id) }}";
+        } else {
+            alert('Error saving attendance: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving attendance. Please try again.');
+    });
+}
+
+// Auto-save notes when they change
+document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('attendance-notes')) {
+        const studentId = e.target.getAttribute('data-student-id');
+        if (!attendanceData[studentId]) {
+            attendanceData[studentId] = {};
+        }
+        attendanceData[studentId].notes = e.target.value;
+    }
+});
+</script>
+{% endblock %}

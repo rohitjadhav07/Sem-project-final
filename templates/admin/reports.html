@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Admin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-chart-bar"></i> System Reports</h2>
+        <p class="text-muted">Attendance and system analytics</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-calendar-check"></i> Attendance Reports</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary">
+                        <i class="fas fa-download"></i> Daily Attendance Report
+                    </button>
+                    <button class="btn btn-outline-success">
+                        <i class="fas fa-download"></i> Weekly Attendance Report
+                    </button>
+                    <button class="btn btn-outline-info">
+                        <i class="fas fa-download"></i> Monthly Attendance Report
+                    </button>
+                    <button class="btn btn-outline-warning">
+                        <i class="fas fa-download"></i> Course-wise Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie"></i> Analytics</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary">
+                        <i class="fas fa-users"></i> User Activity Report
+                    </button>
+                    <button class="btn btn-outline-success">
+                        <i class="fas fa-map-marker-alt"></i> Location Analytics
+                    </button>
+                    <button class="btn btn-outline-info">
+                        <i class="fas fa-clock"></i> Time-based Analysis
+                    </button>
+                    <button class="btn btn-outline-warning">
+                        <i class="fas fa-exclamation-triangle"></i> Anomaly Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-filter"></i> Custom Report Generator</h5>
+            </div>
+            <div class="card-body">
+                <form>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">Report Type</label>
+                            <select class="form-select">
+                                <option>Attendance Summary</option>
+                                <option>Student Performance</option>
+                                <option>Course Analytics</option>
+                                <option>Location Tracking</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Date Range</label>
+                            <select class="form-select">
+                                <option>Last 7 days</option>
+                                <option>Last 30 days</option>
+                                <option>This semester</option>
+                                <option>Custom range</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Format</label>
+                            <select class="form-select">
+                                <option>PDF</option>
+                                <option>Excel</option>
+                                <option>CSV</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary d-block">
+                                <i class="fas fa-download"></i> Generate Report
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

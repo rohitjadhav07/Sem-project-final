@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}{{ lecture.title }} - Teacher{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.lectures') }}">Lectures</a></li>
+                <li class="breadcrumb-item active">{{ lecture.title }}</li>
+            </ol>
+        </nav>
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-chalkboard"></i> {{ lecture.title }}</h2>
+                <p class="text-muted">{{ lecture.course.code }} - {{ lecture.course.name }}</p>
+            </div>
+            <div>
+                {% if lecture.status == 'scheduled' %}
+                    <form method="POST" action="{{ url_for('teacher.start_lecture', lecture_id=lecture.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-play"></i> Start Lecture
+                        </button>
+                    </form>
+                {% elif lecture.status == 'active' %}
+                    <form method="POST" action="{{ url_for('teacher.end_lecture', lecture_id=lecture.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-stop"></i> End Lecture
+                        </button>
+                    </form>
+                {% endif %}
+                <a href="{{ url_for('teacher.mark_attendance', lecture_id=lecture.id) }}" class="btn btn-primary">
+                    <i class="fas fa-check"></i> Mark Attendance
+                </a>
+                {% if not lecture.location_locked %}
+                <a href="{{ url_for('teacher.secure_location_setup', lecture_id=lecture.id) }}" class="btn btn-warning">
+                    <i class="fas fa-map-marker-alt"></i> Set Secure Location
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3>{{ lecture.get_attendance_stats().total_enrolled }}</h3>
+                <p class="mb-0">Total Students</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ lecture.get_attendance_stats().present }}</h3>
+                <p class="mb-0">Present</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3>{{ lecture.get_attendance_stats().late }}</h3>
+                <p class="mb-0">Late</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body text-center">
+                <h3>{{ lecture.get_attendance_stats().absent }}</h3>
+                <p class="mb-0">Absent</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-users"></i> Attendance List</h5>
+                <div>
+                    <span class="badge bg-success">{{ lecture.get_attendance_stats().attendance_rate }}% Attendance</span>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if attendances %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Student ID</th>
+                                    <th>Status</th>
+                                    <th>Marked At</th>
+                                    <th>Location</th>
+                                    <th>Distance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for attendance in attendances %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ attendance.student.full_name }}</strong>
+                                        <br><small class="text-muted">{{ attendance.student.email }}</small>
+                                    </td>
+                                    <td>{{ attendance.student.student_id }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'warning' if attendance.status == 'late' else 'danger' if attendance.status == 'absent' else 'info' }}">
+                                            {{ attendance.status.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if attendance.marked_at %}
+                                            {{ attendance.marked_at.strftime('%H:%M:%S') }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if attendance.student_latitude and attendance.student_longitude %}
+                                            {{ "%.4f"|format(attendance.student_latitude) }}, {{ "%.4f"|format(attendance.student_longitude) }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if attendance.distance_from_lecture %}
+                                            {{ "%.1f"|format(attendance.distance_from_lecture) }}m
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> No attendance records yet.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Lecture Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <td><strong>Course:</strong></td>
+                        <td>{{ lecture.course.code }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Status:</strong></td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if lecture.status == 'completed' else 'primary' if lecture.status == 'active' else 'warning' if lecture.status == 'scheduled' else 'secondary' }}">
+                                {{ lecture.status.title() }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Scheduled:</strong></td>
+                        <td>{{ lecture.scheduled_start.strftime('%Y-%m-%d %H:%M') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Duration:</strong></td>
+                        <td>{{ ((lecture.scheduled_end - lecture.scheduled_start).seconds // 60) }} minutes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Location:</strong></td>
+                        <td>{{ lecture.location_name or 'Not specified' }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Geofence:</strong></td>
+                        <td>{{ lecture.geofence_radius }}m radius</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Location Status:</strong></td>
+                        <td>
+                            {% if lecture.location_locked %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-lock"></i> Secured
+                                </span>
+                                {% if lecture.location_accuracy %}
+                                    <br><small class="text-muted">±{{ "%.1f"|format(lecture.location_accuracy) }}m accuracy</small>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-warning">
+                                    <i class="fas fa-unlock"></i> Not Set
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if lecture.latitude and lecture.longitude %}
+                    <tr>
+                        <td><strong>Coordinates:</strong></td>
+                        <td>
+                            <small>{{ "%.6f"|format(lecture.latitude) }}, {{ "%.6f"|format(lecture.longitude) }}</small>
+                        </td>
+                    </tr>
+                    {% endif %}
+                </table>
+                
+                {% if lecture.description %}
+                    <div class="mt-3">
+                        <strong>Description:</strong>
+                        <p class="text-muted">{{ lecture.description }}</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie"></i> Attendance Summary</h5>
+            </div>
+            <div class="card-body">
+                {% set stats = lecture.get_attendance_stats() %}
+                <div class="progress mb-2" style="height: 25px;">
+                    <div class="progress-bar bg-success" style="width: {{ (stats.present / stats.total_enrolled * 100) if stats.total_enrolled > 0 else 0 }}%">
+                        Present: {{ stats.present }}
+                    </div>
+                    <div class="progress-bar bg-warning" style="width: {{ (stats.late / stats.total_enrolled * 100) if stats.total_enrolled > 0 else 0 }}%">
+                        Late: {{ stats.late }}
+                    </div>
+                    <div class="progress-bar bg-danger" style="width: {{ (stats.absent / stats.total_enrolled * 100) if stats.total_enrolled > 0 else 0 }}%">
+                        Absent: {{ stats.absent }}
+                    </div>
+                </div>
+                <small class="text-muted">Overall attendance rate: {{ stats.attendance_rate }}%</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

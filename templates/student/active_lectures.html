@@ -1,0 +1,577 @@
+{% extends "base.html" %}
+
+{% block title %}Active Lectures - Student{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-broadcast-tower"></i> Active Lectures</h2>
+                <p class="text-muted">Mark your attendance for ongoing lectures</p>
+            </div>
+            <div>
+                <button class="btn btn-outline-primary" onclick="refreshLectures()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-chalkboard"></i> Available for Check-in</h5>
+                <div>
+                    <span class="badge bg-success" id="lectureCount">{{ lectures|length }}</span>
+                    <small class="text-muted">lectures available</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Available for Check-in Now -->
+                <div id="lecturesContainer">
+                    {% if lectures %}
+                        <h6 class="text-success mb-3"><i class="fas fa-check-circle"></i> Available for Check-in Now</h6>
+                        <div class="row">
+                            {% for lecture in lectures %}
+                            <div class="col-md-6 mb-4">
+                                <div class="card border-success">
+                                    <div class="card-header bg-success text-white">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0">{{ lecture.course.code }}</h6>
+                                            <span class="badge bg-light text-success">Check-in Open</span>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <h6 class="card-title">{{ lecture.title }}</h6>
+                                        <p class="card-text">{{ lecture.description or 'No description available' }}</p>
+                                        
+                                        <div class="row text-center mb-3">
+                                            <div class="col-6">
+                                                <small class="text-muted">Start Time</small>
+                                                <br><strong>{{ lecture.scheduled_start.strftime('%H:%M') }}</strong>
+                                            </div>
+                                            <div class="col-6">
+                                                <small class="text-muted">End Time</small>
+                                                <br><strong>{{ lecture.scheduled_end.strftime('%H:%M') }}</strong>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <small class="text-muted">
+                                                <i class="fas fa-map-marker-alt"></i> {{ lecture.location_name or 'Location not specified' }}
+                                            </small>
+                                            {% if lecture.geofence_radius %}
+                                                <br><small class="text-muted">Within {{ lecture.geofence_radius }}m radius</small>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <div class="d-grid gap-2">
+                                            <a href="{{ url_for('student.enhanced_checkin', lecture_id=lecture.id) }}" class="btn btn-success">
+                                                <i class="fas fa-shield-alt"></i> Secure Check-in
+                                            </a>
+                                            <button class="btn btn-outline-success btn-sm" onclick="initiateCheckin({{ lecture.id }})">
+                                                <i class="fas fa-map-marker-alt"></i> Quick Check-in
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer text-muted">
+                                        <small>
+                                            <i class="fas fa-clock"></i> 
+                                            Attendance window: {{ lecture.attendance_window_start }} to +{{ lecture.attendance_window_end }} minutes
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Upcoming Lectures -->
+                    {% if upcoming_lectures %}
+                        <h6 class="text-warning mb-3 mt-4"><i class="fas fa-clock"></i> Upcoming Today</h6>
+                        <div class="row">
+                            {% for lecture in upcoming_lectures %}
+                            <div class="col-md-6 mb-4">
+                                <div class="card border-warning">
+                                    <div class="card-header bg-warning text-dark">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0">{{ lecture.course.code }}</h6>
+                                            <span class="badge bg-light text-warning">Upcoming</span>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <h6 class="card-title">{{ lecture.title }}</h6>
+                                        <p class="card-text">{{ lecture.description or 'No description available' }}</p>
+                                        
+                                        <div class="row text-center mb-3">
+                                            <div class="col-6">
+                                                <small class="text-muted">Start Time</small>
+                                                <br><strong>{{ lecture.scheduled_start.strftime('%H:%M') }}</strong>
+                                            </div>
+                                            <div class="col-6">
+                                                <small class="text-muted">Check-in Opens</small>
+                                                <br><strong>{{ lecture.checkin_opens_at.strftime('%H:%M') if lecture.checkin_opens_at else 'N/A' }}</strong>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="alert alert-warning">
+                                            <small><i class="fas fa-info-circle"></i> Check-in will be available starting {{ lecture.attendance_window_start|abs }} minutes before the lecture.</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Completed/Missed Lectures -->
+                    {% if completed_lectures %}
+                        <h6 class="text-secondary mb-3 mt-4"><i class="fas fa-history"></i> Today's Completed</h6>
+                        <div class="row">
+                            {% for item in completed_lectures %}
+                            <div class="col-md-6 mb-4">
+                                <div class="card border-secondary">
+                                    <div class="card-header bg-light">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0">{{ item.lecture.course.code }}</h6>
+                                            <span class="badge bg-{{ 'success' if item.status == 'attended' else 'danger' }}">
+                                                {{ 'Attended' if item.status == 'attended' else 'Missed' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <h6 class="card-title">{{ item.lecture.title }}</h6>
+                                        
+                                        {% if item.attendance %}
+                                            <div class="alert alert-success">
+                                                <small><i class="fas fa-check"></i> Attendance marked at {{ item.attendance.marked_at.strftime('%H:%M') }}</small>
+                                            </div>
+                                        {% else %}
+                                            <div class="alert alert-danger">
+                                                <small><i class="fas fa-times"></i> Attendance window closed</small>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    <!-- No lectures message -->
+                    {% if not lectures and not upcoming_lectures and not completed_lectures %}
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle fa-3x mb-3"></i>
+                            <h5>No Lectures Today</h5>
+                            <p>There are no lectures scheduled for today in your enrolled courses.</p>
+                            <button class="btn btn-outline-primary" onclick="refreshLectures()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Location Check-in Modal -->
+<div class="modal fade" id="checkinModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-map-marker-alt"></i> Check-in to Lecture
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="locationStatus" class="alert alert-info">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span>Getting your location...</span>
+                    </div>
+                </div>
+                
+                <div id="lectureInfo" style="display: none;">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 id="lectureTitle" class="card-title"></h6>
+                            <p id="courseInfo" class="card-text text-muted"></p>
+                            
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">Your Distance</small>
+                                    <br><strong id="distance">-</strong> meters
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Required Distance</small>
+                                    <br><strong id="requiredDistance">-</strong> meters
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="locationAccuracy" class="mt-3" style="display: none;">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Location Accuracy:</strong> <span id="accuracyValue">-</span> meters
+                        <br><small>For best results, ensure you have a clear view of the sky and GPS is enabled.</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmCheckin" disabled>
+                    <i class="fas fa-check"></i> Confirm Check-in
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle"></i> Check-in Successful!
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                <h5>Attendance Marked Successfully</h5>
+                <p id="successMessage">Your attendance has been recorded for this lecture.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" data-bs-dismiss="modal">Great!</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentLecture = null;
+let userLocation = null;
+
+function refreshLectures() {
+    fetch('/student/lectures/active', {
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        displayLectures(data.lectures || []);
+        document.getElementById('lectureCount').textContent = (data.lectures || []).length;
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('lecturesContainer').innerHTML = 
+            '<div class="alert alert-danger">Error loading lectures. Please try again.</div>';
+    });
+}
+
+function displayLectures(lectures) {
+    const container = document.getElementById('lecturesContainer');
+    
+    if (lectures.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle fa-3x mb-3"></i>
+                <h5>No Active Lectures</h5>
+                <p>There are no lectures available for check-in at the moment.</p>
+                <button class="btn btn-outline-primary" onclick="refreshLectures()">
+                    <i class="fas fa-sync-alt"></i> Check Again
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<div class="row">';
+    lectures.forEach(lecture => {
+        const startTime = new Date(lecture.scheduled_start).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const endTime = new Date(lecture.scheduled_end).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        html += `
+            <div class="col-md-6 mb-4">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">${lecture.course_code}</h6>
+                            <span class="badge bg-light text-primary">Active</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h6 class="card-title">${lecture.title}</h6>
+                        <p class="card-text">${lecture.description || 'No description available'}</p>
+                        
+                        <div class="row text-center mb-3">
+                            <div class="col-6">
+                                <small class="text-muted">Start Time</small>
+                                <br><strong>${startTime}</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">End Time</small>
+                                <br><strong>${endTime}</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                <i class="fas fa-map-marker-alt"></i> ${lecture.location_name || 'Location not specified'}
+                            </small>
+                            <br><small class="text-muted">Within ${lecture.geofence_radius}m radius</small>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button class="btn btn-success" onclick="initiateCheckin(${lecture.id})">
+                                <i class="fas fa-map-marker-alt"></i> Check In Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+function initiateCheckin(lectureId) {
+    // Find the lecture data
+    fetch('/student/lectures/active', {
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        currentLecture = (data.lectures || []).find(l => l.id === lectureId);
+        if (currentLecture) {
+            showCheckinModal();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error loading lecture data. Please try again.');
+    });
+}
+
+function showCheckinModal() {
+    const modal = new bootstrap.Modal(document.getElementById('checkinModal'));
+    modal.show();
+    
+    // Reset modal state
+    document.getElementById('locationStatus').className = 'alert alert-info';
+    document.getElementById('locationStatus').innerHTML = `
+        <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <span>Getting your location...</span>
+        </div>
+    `;
+    document.getElementById('lectureInfo').style.display = 'none';
+    document.getElementById('locationAccuracy').style.display = 'none';
+    document.getElementById('confirmCheckin').disabled = true;
+    
+    // Update lecture info
+    document.getElementById('lectureTitle').textContent = currentLecture.title;
+    document.getElementById('courseInfo').textContent = `${currentLecture.course_code} - ${currentLecture.course_name}`;
+    document.getElementById('requiredDistance').textContent = currentLecture.geofence_radius;
+    
+    // Get user location
+    if (navigator.geolocation) {
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000
+        };
+        
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                userLocation = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy
+                };
+                
+                // Calculate distance
+                const distance = calculateDistance(
+                    userLocation.latitude, userLocation.longitude,
+                    currentLecture.latitude, currentLecture.longitude
+                );
+                
+                document.getElementById('distance').textContent = Math.round(distance);
+                document.getElementById('lectureInfo').style.display = 'block';
+                
+                // Show accuracy info
+                document.getElementById('accuracyValue').textContent = Math.round(userLocation.accuracy);
+                document.getElementById('locationAccuracy').style.display = 'block';
+                
+                if (distance <= currentLecture.geofence_radius) {
+                    document.getElementById('locationStatus').className = 'alert alert-success';
+                    document.getElementById('locationStatus').innerHTML = 
+                        '<i class="fas fa-check-circle"></i> <strong>Perfect!</strong> You are within the lecture area.';
+                    document.getElementById('confirmCheckin').disabled = false;
+                } else {
+                    document.getElementById('locationStatus').className = 'alert alert-warning';
+                    document.getElementById('locationStatus').innerHTML = 
+                        `<i class="fas fa-exclamation-triangle"></i> <strong>Too far!</strong> You need to be within ${currentLecture.geofence_radius}m of the lecture location.`;
+                }
+            },
+            error => {
+                let errorMessage = 'Unable to get your location.';
+                let showHelpButton = false;
+                
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMessage = 'Location access denied. Please enable location services for this website.';
+                        showHelpButton = true;
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMessage = 'Location information unavailable. Please ensure GPS is enabled and try moving to an open area.';
+                        break;
+                    case error.TIMEOUT:
+                        errorMessage = 'Location request timed out. Please try again.';
+                        break;
+                }
+                
+                document.getElementById('locationStatus').className = 'alert alert-danger';
+                document.getElementById('locationStatus').innerHTML = 
+                    `<i class="fas fa-times-circle"></i> <strong>Error:</strong> ${errorMessage}`;
+                
+                if (showHelpButton) {
+                    document.getElementById('locationStatus').innerHTML += `
+                        <div class="mt-2">
+                            <button class="btn btn-info btn-sm" onclick="showLocationHelp()">
+                                <i class="fas fa-question-circle"></i> How to Enable Location
+                            </button>
+                            <button class="btn btn-warning btn-sm ml-2" onclick="retryLocation()">
+                                <i class="fas fa-redo"></i> Try Again
+                            </button>
+                        </div>
+                    `;
+                }
+            },
+            options
+        );
+    } else {
+        document.getElementById('locationStatus').className = 'alert alert-danger';
+        document.getElementById('locationStatus').innerHTML = 
+            '<i class="fas fa-times-circle"></i> <strong>Error:</strong> Geolocation is not supported by this browser.';
+    }
+}
+
+document.getElementById('confirmCheckin').addEventListener('click', function() {
+    if (!userLocation || !currentLecture) return;
+    
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Checking in...';
+    
+    fetch('/student/api/checkin', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            lecture_id: currentLecture.id,
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            // Hide check-in modal
+            bootstrap.Modal.getInstance(document.getElementById('checkinModal')).hide();
+            
+            // Show success modal
+            document.getElementById('successMessage').textContent = data.message;
+            const successModal = new bootstrap.Modal(document.getElementById('successModal'));
+            successModal.show();
+            
+            // Refresh lectures list
+            setTimeout(() => {
+                refreshLectures();
+            }, 1000);
+        } else {
+            alert('Check-in failed: ' + (data.error || 'Unknown error'));
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-check"></i> Confirm Check-in';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Check-in failed. Please try again.');
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-check"></i> Confirm Check-in';
+    });
+});
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// Auto-refresh every 30 seconds
+setInterval(refreshLectures, 30000);
+
+// Location help functions
+function showLocationHelp() {
+    alert(`To enable location access:
+
+Chrome/Edge:
+1. Click the lock icon in the address bar
+2. Set "Location" to "Allow"
+3. Refresh the page
+
+Firefox:
+1. Click the shield icon in the address bar
+2. Click "Allow Location Access"
+
+Safari (Mobile):
+1. Go to Settings > Privacy & Security
+2. Tap "Location Services"
+3. Find Safari and enable location
+
+If you're still having issues, try:
+- Refreshing the page after enabling location
+- Moving to an area with better GPS signal
+- Ensuring you're not in incognito/private mode`);
+}
+
+function retryLocation() {
+    // Close modal and retry
+    const modal = bootstrap.Modal.getInstance(document.getElementById('checkinModal'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    setTimeout(() => {
+        if (currentLecture) {
+            showCheckinModal();
+        }
+    }, 500);
+}
+</script>
+{% endblock %}

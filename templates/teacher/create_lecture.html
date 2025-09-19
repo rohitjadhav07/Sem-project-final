@@ -1,0 +1,424 @@
+{% extends "base.html" %}
+
+{% block title %}Create Lecture - Teacher{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.lectures') }}">Lectures</a></li>
+                <li class="breadcrumb-item active">Create Lecture</li>
+            </ol>
+        </nav>
+        
+        <h2><i class="fas fa-plus"></i> Create New Lecture</h2>
+        <p class="text-muted">Set up a new lecture with location-based attendance</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-edit"></i> Lecture Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="lectureForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="course_id" class="form-label">Course *</label>
+                                <select class="form-select" id="course_id" name="course_id" required>
+                                    <option value="">Select a course</option>
+                                    {% for course in courses %}
+                                        <option value="{{ course.id }}" {{ 'selected' if request.args.get('course_id') == course.id|string else '' }}>
+                                            {{ course.code }} - {{ course.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Lecture Title *</label>
+                                <input type="text" class="form-control" id="title" name="title" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="scheduled_start" class="form-label">Start Date & Time *</label>
+                                <input type="datetime-local" class="form-control" id="scheduled_start" name="scheduled_start" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="scheduled_end" class="form-label">End Date & Time *</label>
+                                <input type="datetime-local" class="form-control" id="scheduled_end" name="scheduled_end" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="location_name" class="form-label">Location Name</label>
+                        <input type="text" class="form-control" id="location_name" name="location_name" placeholder="e.g., Room 101, Computer Science Building">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="latitude" class="form-label">Latitude *</label>
+                                <input type="number" step="any" class="form-control" id="latitude" name="latitude" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="longitude" class="form-label">Longitude *</label>
+                                <input type="number" step="any" class="form-control" id="longitude" name="longitude" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="geofence_radius" class="form-label">Geofence Radius (meters) *</label>
+                                <select class="form-select" id="geofence_radius" name="geofence_radius" required>
+                                    <option value="25">25m - Small Room</option>
+                                    <option value="50" selected>50m - Standard Classroom</option>
+                                    <option value="75">75m - Large Hall</option>
+                                    <option value="100">100m - Auditorium</option>
+                                    <option value="150">150m - Outdoor Area</option>
+                                </select>
+                                <small class="text-muted">Choose based on your venue size</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-outline-info" onclick="getCurrentLocation()">
+                                <i class="fas fa-crosshairs"></i> Use Current Location
+                            </button>
+                            <button type="button" class="btn btn-outline-success" onclick="getHighAccuracyLocation()">
+                                <i class="fas fa-bullseye"></i> High Accuracy Location
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="openMapModal()">
+                                <i class="fas fa-map"></i> Select on Map
+                            </button>
+                            <button type="button" class="btn btn-outline-warning" onclick="validateLocation()">
+                                <i class="fas fa-check-circle"></i> Validate Location
+                            </button>
+                        </div>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="fas fa-info-circle"></i> 
+                            Use "High Accuracy Location" for precise classroom positioning. Location will be permanently stored for this lecture.
+                        </small>
+                    </div>
+                    
+                    <!-- Location Status -->
+                    <div class="mb-3">
+                        <div id="locationStatus" class="alert alert-info" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Getting location...
+                        </div>
+                        <div id="locationAccuracy" class="alert alert-warning" style="display: none;">
+                            <i class="fas fa-exclamation-triangle"></i> 
+                            <span id="accuracyText"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('teacher.lectures') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Create Lecture
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Tips</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-lightbulb text-warning"></i>
+                        <strong>Location Accuracy:</strong> Use precise coordinates for better attendance tracking.
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-shield-alt text-success"></i>
+                        <strong>Geofence Radius:</strong> Recommended 50-100 meters for classroom settings.
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-clock text-info"></i>
+                        <strong>Timing:</strong> Students can mark attendance 15 minutes before to 15 minutes after start time.
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-mobile-alt text-primary"></i>
+                        <strong>Mobile Friendly:</strong> Students can mark attendance using their smartphones.
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5><i class="fas fa-map"></i> Location Preview</h5>
+            </div>
+            <div class="card-body">
+                <div id="locationPreview" class="text-center text-muted">
+                    <i class="fas fa-map-marker-alt fa-3x mb-2"></i>
+                    <p>Enter coordinates to see location preview</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Map Modal -->
+<div class="modal fade" id="mapModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Select Location</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="map" style="height: 400px; background: #f0f0f0; display: flex; align-items: center; justify-content: center;">
+                    <p class="text-muted">Map integration would go here</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="selectMapLocation()">Select Location</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function getCurrentLocation() {
+    if (navigator.geolocation) {
+        showLocationStatus('Getting current location...');
+        navigator.geolocation.getCurrentPosition(function(position) {
+            setLocationData(position);
+            showLocationAccuracy(position.coords.accuracy);
+            hideLocationStatus();
+        }, function(error) {
+            hideLocationStatus();
+            alert('Error getting location: ' + error.message);
+        });
+    } else {
+        alert('Geolocation is not supported by this browser.');
+    }
+}
+
+function getHighAccuracyLocation() {
+    if (navigator.geolocation) {
+        showLocationStatus('Getting high accuracy location... Please wait.');
+        
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 30000,
+            maximumAge: 0
+        };
+        
+        navigator.geolocation.getCurrentPosition(function(position) {
+            setLocationData(position);
+            showLocationAccuracy(position.coords.accuracy);
+            hideLocationStatus();
+            
+            // Validate accuracy
+            if (position.coords.accuracy > 20) {
+                showLocationWarning(`Location accuracy is ${Math.round(position.coords.accuracy)}m. Consider moving to an area with better GPS signal.`);
+            } else {
+                showLocationSuccess(`High accuracy location captured! Accuracy: ${Math.round(position.coords.accuracy)}m`);
+            }
+        }, function(error) {
+            hideLocationStatus();
+            let errorMsg = 'Error getting high accuracy location: ';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMsg += 'Location access denied. Please enable location services.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMsg += 'Location information unavailable. Try moving to an open area.';
+                    break;
+                case error.TIMEOUT:
+                    errorMsg += 'Location request timed out. Please try again.';
+                    break;
+                default:
+                    errorMsg += error.message;
+                    break;
+            }
+            alert(errorMsg);
+        }, options);
+    } else {
+        alert('Geolocation is not supported by this browser.');
+    }
+}
+
+function setLocationData(position) {
+    document.getElementById('latitude').value = position.coords.latitude.toFixed(8);
+    document.getElementById('longitude').value = position.coords.longitude.toFixed(8);
+    
+    // Store additional location metadata
+    const locationData = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        timestamp: new Date().toISOString(),
+        altitude: position.coords.altitude,
+        heading: position.coords.heading,
+        speed: position.coords.speed
+    };
+    
+    // Store in hidden field for backend processing
+    let metadataField = document.getElementById('location_metadata');
+    if (!metadataField) {
+        metadataField = document.createElement('input');
+        metadataField.type = 'hidden';
+        metadataField.id = 'location_metadata';
+        metadataField.name = 'location_metadata';
+        document.querySelector('form').appendChild(metadataField);
+    }
+    metadataField.value = JSON.stringify(locationData);
+    
+    updateLocationPreview();
+}
+
+function showLocationStatus(message) {
+    const statusDiv = document.getElementById('locationStatus');
+    statusDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
+    statusDiv.style.display = 'block';
+    statusDiv.className = 'alert alert-info';
+}
+
+function hideLocationStatus() {
+    document.getElementById('locationStatus').style.display = 'none';
+}
+
+function showLocationAccuracy(accuracy) {
+    const accuracyDiv = document.getElementById('locationAccuracy');
+    const accuracyText = document.getElementById('accuracyText');
+    
+    if (accuracy <= 10) {
+        accuracyDiv.className = 'alert alert-success';
+        accuracyText.innerHTML = `Excellent accuracy: ±${Math.round(accuracy)}m`;
+    } else if (accuracy <= 20) {
+        accuracyDiv.className = 'alert alert-warning';
+        accuracyText.innerHTML = `Good accuracy: ±${Math.round(accuracy)}m`;
+    } else {
+        accuracyDiv.className = 'alert alert-danger';
+        accuracyText.innerHTML = `Poor accuracy: ±${Math.round(accuracy)}m - Consider retrying in an open area`;
+    }
+    
+    accuracyDiv.style.display = 'block';
+}
+
+function showLocationWarning(message) {
+    const statusDiv = document.getElementById('locationStatus');
+    statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+    statusDiv.className = 'alert alert-warning';
+    statusDiv.style.display = 'block';
+}
+
+function showLocationSuccess(message) {
+    const statusDiv = document.getElementById('locationStatus');
+    statusDiv.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+    statusDiv.className = 'alert alert-success';
+    statusDiv.style.display = 'block';
+}
+
+function validateLocation() {
+    const lat = document.getElementById('latitude').value;
+    const lng = document.getElementById('longitude').value;
+    
+    if (!lat || !lng) {
+        alert('Please capture location first!');
+        return;
+    }
+    
+    showLocationStatus('Validating location coordinates...');
+    
+    // Validate coordinates
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+    
+    if (latitude < -90 || latitude > 90) {
+        alert('Invalid latitude. Must be between -90 and 90.');
+        hideLocationStatus();
+        return;
+    }
+    
+    if (longitude < -180 || longitude > 180) {
+        alert('Invalid longitude. Must be between -180 and 180.');
+        hideLocationStatus();
+        return;
+    }
+    
+    // Check if coordinates are reasonable (not 0,0 or other suspicious values)
+    if (latitude === 0 && longitude === 0) {
+        alert('Invalid coordinates detected. Please capture location again.');
+        hideLocationStatus();
+        return;
+    }
+    
+    hideLocationStatus();
+    showLocationSuccess(`Location validated successfully! Coordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+}
+
+function openMapModal() {
+    var mapModal = new bootstrap.Modal(document.getElementById('mapModal'));
+    mapModal.show();
+}
+
+function selectMapLocation() {
+    // This would integrate with a mapping service
+    alert('Map integration would allow selecting location here');
+    var mapModal = bootstrap.Modal.getInstance(document.getElementById('mapModal'));
+    mapModal.hide();
+}
+
+function updateLocationPreview() {
+    var lat = document.getElementById('latitude').value;
+    var lng = document.getElementById('longitude').value;
+    
+    if (lat && lng) {
+        document.getElementById('locationPreview').innerHTML = 
+            '<i class="fas fa-map-marker-alt fa-2x text-success mb-2"></i>' +
+            '<p><strong>Coordinates:</strong><br>' + lat + ', ' + lng + '</p>';
+    }
+}
+
+// Update preview when coordinates change
+document.getElementById('latitude').addEventListener('input', updateLocationPreview);
+document.getElementById('longitude').addEventListener('input', updateLocationPreview);
+
+// Set default start time to current time + 1 hour
+document.addEventListener('DOMContentLoaded', function() {
+    var now = new Date();
+    now.setHours(now.getHours() + 1);
+    var startTime = now.toISOString().slice(0, 16);
+    document.getElementById('scheduled_start').value = startTime;
+    
+    // Set end time to start time + 1.5 hours
+    now.setHours(now.getHours() + 1, now.getMinutes() + 30);
+    var endTime = now.toISOString().slice(0, 16);
+    document.getElementById('scheduled_end').value = endTime;
+});
+</script>
+{% endblock %}

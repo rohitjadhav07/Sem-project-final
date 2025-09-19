@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}My Courses - Student{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-book"></i> My Courses</h2>
+                <p class="text-muted">View your enrolled courses and attendance</p>
+            </div>
+            <div>
+                <a href="{{ url_for('student.browse_courses') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Browse Courses
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    {% if enrollments %}
+        {% for enrollment in enrollments %}
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ enrollment.course.code }}</h5>
+                    <span class="badge bg-primary">{{ enrollment.course.credits }} Credits</span>
+                </div>
+                <div class="card-body">
+                    <h6 class="card-title">{{ enrollment.course.name }}</h6>
+                    <p class="card-text">{{ enrollment.course.description or 'No description available' }}</p>
+                    
+                    <div class="row text-center mb-3">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <h5 class="text-primary">{{ enrollment.course.get_total_lectures() }}</h5>
+                                <small class="text-muted">Total Lectures</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <h5 class="text-success">{{ enrollment.get_attendance_percentage() }}%</h5>
+                            <small class="text-muted">Attendance</small>
+                        </div>
+                    </div>
+                    
+                    <div class="progress mb-3" style="height: 20px;">
+                        <div class="progress-bar bg-success" style="width: {{ enrollment.get_attendance_percentage() }}%">
+                            {{ enrollment.get_attendance_percentage() }}%
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            Teacher: {{ enrollment.course.teacher.full_name if enrollment.course.teacher else 'N/A' }}
+                        </small>
+                        <a href="{{ url_for('student.course_detail', course_id=enrollment.course.id) }}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-eye"></i> View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="col-12">
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle fa-3x mb-3"></i>
+                <h4>No Courses Enrolled</h4>
+                <p>You haven't enrolled in any courses yet.</p>
+                <a href="{{ url_for('student.browse_courses') }}" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Browse Available Courses
+                </a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+{% if available_courses %}
+<div class="row mt-4">
+    <div class="col-12">
+        <h3><i class="fas fa-search"></i> Available Courses</h3>
+        <p class="text-muted">Courses you can enroll in</p>
+    </div>
+</div>
+
+<div class="row">
+    {% for course in available_courses %}
+    <div class="col-md-6 mb-4">
+        <div class="card border-primary">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ course.code }}</h5>
+                    <span class="badge bg-primary">{{ course.credits }} Credits</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <h6 class="card-title">{{ course.name }}</h6>
+                <p class="card-text">{{ course.description or 'No description available' }}</p>
+                
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h5 class="text-info">{{ course.get_total_lectures() }}</h5>
+                            <small class="text-muted">Lectures</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h5 class="text-success">{{ course.get_enrollment_count() }}</h5>
+                        <small class="text-muted">Students</small>
+                    </div>
+                </div>
+                
+                <form method="POST" action="{{ url_for('student.enroll_course', course_id=course.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-plus"></i> Enroll Now
+                    </button>
+                </form>
+            </div>
+            <div class="card-footer text-muted">
+                <small>
+                    Teacher: {{ course.teacher.full_name if course.teacher else 'N/A' }}
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if enrollments %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-bar"></i> Attendance Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Course</th>
+                                <th>Total Lectures</th>
+                                <th>Attended</th>
+                                <th>Attendance Rate</th>
+                                <th>Grade</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for enrollment in enrollments %}
+                            <tr>
+                                <td>
+                                    <strong>{{ enrollment.course.code }}</strong>
+                                    <br><small class="text-muted">{{ enrollment.course.name }}</small>
+                                </td>
+                                <td>{{ enrollment.course.get_total_lectures() }}</td>
+                                <td>
+                                    {% set total_lectures = enrollment.course.get_total_lectures() %}
+                                    {% set attendance_rate = enrollment.get_attendance_percentage() %}
+                                    {{ ((attendance_rate / 100) * total_lectures)|round|int }}
+                                </td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-{{ 'success' if attendance_rate >= 75 else 'warning' if attendance_rate >= 50 else 'danger' }}" 
+                                             style="width: {{ attendance_rate }}%">
+                                            {{ attendance_rate }}%
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if enrollment.grade %}
+                                        <span class="badge bg-primary">{{ enrollment.grade }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Not graded</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

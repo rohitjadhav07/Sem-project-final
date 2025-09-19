@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Location Test - Geo Attendance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h4><i class="fas fa-map-marker-alt"></i> Location Services Test</h4>
+                    </div>
+                    <div class="card-body">
+                        
+                        <!-- System Information -->
+                        <div class="alert alert-info">
+                            <h6><i class="fas fa-info-circle"></i> System Information</h6>
+                            <div id="systemInfo">
+                                <p><strong>Protocol:</strong> <span id="protocol"></span></p>
+                                <p><strong>Host:</strong> <span id="hostname"></span></p>
+                                <p><strong>User Agent:</strong> <span id="userAgent"></span></p>
+                                <p><strong>Geolocation Support:</strong> <span id="geoSupport"></span></p>
+                                <p><strong>Permissions API:</strong> <span id="permissionsSupport"></span></p>
+                            </div>
+                        </div>
+                        
+                        <!-- Test Controls -->
+                        <div class="mb-4">
+                            <h5>Location Tests</h5>
+                            <div class="btn-group-vertical w-100" role="group">
+                                <button type="button" class="btn btn-primary mb-2" onclick="testBasicLocation()">
+                                    <i class="fas fa-crosshairs"></i> Test Basic Location
+                                </button>
+                                <button type="button" class="btn btn-success mb-2" onclick="testHighAccuracyLocation()">
+                                    <i class="fas fa-bullseye"></i> Test High Accuracy Location
+                                </button>
+                                <button type="button" class="btn btn-warning mb-2" onclick="checkPermissions()">
+                                    <i class="fas fa-shield-alt"></i> Check Permissions
+                                </button>
+                                <button type="button" class="btn btn-info mb-2" onclick="showLocationGuide()">
+                                    <i class="fas fa-question-circle"></i> Show Location Guide
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Status Display -->
+                        <div id="statusDisplay" style="display: none;"></div>
+                        
+                        <!-- Results Display -->
+                        <div id="resultsDisplay" style="display: none;">
+                            <h5>Location Results</h5>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <tbody id="resultsTable">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Error Display -->
+                        <div id="errorDisplay" style="display: none;">
+                            <h5>Error Information</h5>
+                            <div id="errorDetails"></div>
+                        </div>
+                        
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Permission Guide Modal -->
+    <div class="modal fade" id="locationGuideModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-map-marker-alt"></i> How to Enable Location Access
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Location Access Required</h6>
+                        <p>This application needs access to your device's location. Follow the steps below for your browser:</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fab fa-chrome"></i> Chrome / Edge</h6>
+                            <ol class="small">
+                                <li>Look for the <i class="fas fa-map-marker-alt"></i> location icon in the address bar</li>
+                                <li>Click it and select "Always allow"</li>
+                                <li>Or click the <i class="fas fa-lock"></i> lock icon → Site settings → Location → Allow</li>
+                                <li>Refresh the page</li>
+                            </ol>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fab fa-firefox"></i> Firefox</h6>
+                            <ol class="small">
+                                <li>Look for the <i class="fas fa-shield-alt"></i> shield icon in the address bar</li>
+                                <li>Click "Allow Location Access"</li>
+                                <li>Or go to Settings → Privacy & Security → Permissions → Location</li>
+                                <li>Add this site to exceptions</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mt-3">
+                        <h6><i class="fas fa-lightbulb"></i> Troubleshooting</h6>
+                        <ul class="mb-0 small">
+                            <li><strong>Still blocked?</strong> Try opening in a new tab or refreshing</li>
+                            <li><strong>Incognito mode?</strong> Location is often blocked by default</li>
+                            <li><strong>Mobile device?</strong> Check your browser app permissions in device settings</li>
+                            <li><strong>Corporate network?</strong> Location services might be restricted</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="retryAfterGuide()">
+                        <i class="fas fa-redo"></i> Try Again
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize system information
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('protocol').textContent = location.protocol;
+            document.getElementById('hostname').textContent = location.hostname;
+            document.getElementById('userAgent').textContent = navigator.userAgent;
+            document.getElementById('geoSupport').textContent = navigator.geolocation ? 'Yes' : 'No';
+            document.getElementById('permissionsSupport').textContent = navigator.permissions ? 'Yes' : 'No';
+        });
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusDisplay');
+            const alertClass = type === 'error' ? 'alert-danger' : 
+                              type === 'success' ? 'alert-success' : 
+                              type === 'warning' ? 'alert-warning' : 'alert-info';
+            
+            statusDiv.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
+            statusDiv.style.display = 'block';
+        }
+
+        function showResults(position) {
+            const resultsDiv = document.getElementById('resultsDisplay');
+            const tableBody = document.getElementById('resultsTable');
+            
+            const coords = position.coords;
+            const timestamp = new Date(position.timestamp);
+            
+            tableBody.innerHTML = `
+                <tr><td><strong>Latitude:</strong></td><td>${coords.latitude.toFixed(8)}</td></tr>
+                <tr><td><strong>Longitude:</strong></td><td>${coords.longitude.toFixed(8)}</td></tr>
+                <tr><td><strong>Accuracy:</strong></td><td>±${Math.round(coords.accuracy)} meters</td></tr>
+                <tr><td><strong>Altitude:</strong></td><td>${coords.altitude ? coords.altitude.toFixed(2) + 'm' : 'Not available'}</td></tr>
+                <tr><td><strong>Altitude Accuracy:</strong></td><td>${coords.altitudeAccuracy ? '±' + Math.round(coords.altitudeAccuracy) + 'm' : 'Not available'}</td></tr>
+                <tr><td><strong>Heading:</strong></td><td>${coords.heading ? coords.heading.toFixed(2) + '°' : 'Not available'}</td></tr>
+                <tr><td><strong>Speed:</strong></td><td>${coords.speed ? coords.speed.toFixed(2) + ' m/s' : 'Not available'}</td></tr>
+                <tr><td><strong>Timestamp:</strong></td><td>${timestamp.toLocaleString()}</td></tr>
+            `;
+            
+            resultsDiv.style.display = 'block';
+        }
+
+        function showError(error) {
+            const errorDiv = document.getElementById('errorDisplay');
+            const errorDetails = document.getElementById('errorDetails');
+            
+            let errorMessage = 'Unknown error';
+            let suggestions = [];
+            
+            if (error.code !== undefined) {
+                switch(error.code) {
+                    case 1: // PERMISSION_DENIED
+                        errorMessage = 'Permission denied - Location access was blocked';
+                        suggestions = [
+                            'Click the location icon in your browser address bar',
+                            'Select "Allow" for location access',
+                            'Check if you\'re in incognito/private browsing mode',
+                            'Try refreshing the page after allowing location'
+                        ];
+                        break;
+                    case 2: // POSITION_UNAVAILABLE
+                        errorMessage = 'Position unavailable - Cannot determine location';
+                        suggestions = [
+                            'Ensure GPS/Location Services are enabled on your device',
+                            'Move to an area with better signal (near windows, outdoors)',
+                            'Check your device\'s location settings'
+                        ];
+                        break;
+                    case 3: // TIMEOUT
+                        errorMessage = 'Timeout - Location request took too long';
+                        suggestions = [
+                            'Try again with a longer timeout',
+                            'Move to an area with better GPS signal',
+                            'Ensure your device has a clear view of the sky'
+                        ];
+                        break;
+                }
+            }
+            
+            let html = `
+                <div class="alert alert-danger">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Error Code: ${error.code || 'Unknown'}</h6>
+                    <p><strong>Message:</strong> ${errorMessage}</p>
+                    <p><strong>Details:</strong> ${error.message}</p>
+                </div>
+            `;
+            
+            if (suggestions.length > 0) {
+                html += `
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-lightbulb"></i> Suggestions:</h6>
+                        <ul class="mb-0">
+                            ${suggestions.map(s => `<li>${s}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            errorDetails.innerHTML = html;
+            errorDiv.style.display = 'block';
+        }
+
+        function testBasicLocation() {
+            showStatus('Testing basic location access...', 'info');
+            document.getElementById('resultsDisplay').style.display = 'none';
+            document.getElementById('errorDisplay').style.display = 'none';
+            
+            if (!navigator.geolocation) {
+                showStatus('Geolocation is not supported by this browser', 'error');
+                return;
+            }
+            
+            const options = {
+                enableHighAccuracy: false,
+                timeout: 10000,
+                maximumAge: 300000 // 5 minutes
+            };
+            
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    showStatus('Location obtained successfully!', 'success');
+                    showResults(position);
+                },
+                function(error) {
+                    showStatus('Failed to get location', 'error');
+                    showError(error);
+                },
+                options
+            );
+        }
+
+        function testHighAccuracyLocation() {
+            showStatus('Testing high accuracy location access...', 'info');
+            document.getElementById('resultsDisplay').style.display = 'none';
+            document.getElementById('errorDisplay').style.display = 'none';
+            
+            if (!navigator.geolocation) {
+                showStatus('Geolocation is not supported by this browser', 'error');
+                return;
+            }
+            
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 30000,
+                maximumAge: 0
+            };
+            
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    showStatus('High accuracy location obtained successfully!', 'success');
+                    showResults(position);
+                },
+                function(error) {
+                    showStatus('Failed to get high accuracy location', 'error');
+                    showError(error);
+                },
+                options
+            );
+        }
+
+        async function checkPermissions() {
+            showStatus('Checking location permissions...', 'info');
+            document.getElementById('resultsDisplay').style.display = 'none';
+            document.getElementById('errorDisplay').style.display = 'none';
+            
+            if (!navigator.permissions) {
+                showStatus('Permissions API not supported in this browser', 'warning');
+                return;
+            }
+            
+            try {
+                const permission = await navigator.permissions.query({name: 'geolocation'});
+                
+                let statusMessage = `Permission state: ${permission.state}`;
+                let statusType = 'info';
+                
+                switch(permission.state) {
+                    case 'granted':
+                        statusMessage += ' - Location access is allowed';
+                        statusType = 'success';
+                        break;
+                    case 'denied':
+                        statusMessage += ' - Location access is blocked';
+                        statusType = 'error';
+                        break;
+                    case 'prompt':
+                        statusMessage += ' - Browser will ask for permission';
+                        statusType = 'warning';
+                        break;
+                }
+                
+                showStatus(statusMessage, statusType);
+                
+            } catch (error) {
+                showStatus('Error checking permissions: ' + error.message, 'error');
+            }
+        }
+
+        function showLocationGuide() {
+            const modal = new bootstrap.Modal(document.getElementById('locationGuideModal'));
+            modal.show();
+        }
+
+        function retryAfterGuide() {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('locationGuideModal'));
+            modal.hide();
+            
+            setTimeout(() => {
+                testBasicLocation();
+            }, 500);
+        }
+    </script>
+</body>
+</html>

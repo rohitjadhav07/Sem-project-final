@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Reports - Teacher{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-chart-bar"></i> Attendance Reports</h2>
+        <p class="text-muted">View and analyze attendance data for your courses</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-filter"></i> Report Filters</h5>
+            </div>
+            <div class="card-body">
+                <form id="reportForm">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="form-label">Course</label>
+                            <select class="form-select" id="courseFilter">
+                                <option value="">All Courses</option>
+                                {% for course in courses %}
+                                    <option value="{{ course.id }}">{{ course.code }} - {{ course.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Date Range</label>
+                            <select class="form-select" id="dateRange">
+                                <option value="7">Last 7 days</option>
+                                <option value="30">Last 30 days</option>
+                                <option value="90">Last 90 days</option>
+                                <option value="semester">This semester</option>
+                                <option value="custom">Custom range</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Report Type</label>
+                            <select class="form-select" id="reportType">
+                                <option value="summary">Summary</option>
+                                <option value="detailed">Detailed</option>
+                                <option value="trends">Trends</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Format</label>
+                            <select class="form-select" id="exportFormat">
+                                <option value="html">View Online</option>
+                                <option value="pdf">PDF</option>
+                                <option value="excel">Excel</option>
+                                <option value="csv">CSV</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="button" class="btn btn-primary d-block w-100" onclick="generateReport()">
+                                <i class="fas fa-chart-bar"></i> Generate
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mt-3" id="customDateRange" style="display: none;">
+                        <div class="col-md-3">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" class="form-control" id="startDate">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">End Date</label>
+                            <input type="date" class="form-control" id="endDate">
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-table"></i> Report Results</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshReport()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="reportContent">
+                    <div class="text-center text-muted py-5">
+                        <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                        <h5>No Report Generated</h5>
+                        <p>Select your filters and click "Generate" to view attendance reports.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats Cards -->
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3 id="totalLectures">-</h3>
+                <p class="mb-0">Total Lectures</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3 id="avgAttendance">-</h3>
+                <p class="mb-0">Avg Attendance</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3 id="totalStudents">-</h3>
+                <p class="mb-0">Total Students</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3 id="activeCourses">{{ courses|length }}</h3>
+                <p class="mb-0">Active Courses</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Show/hide custom date range
+document.getElementById('dateRange').addEventListener('change', function() {
+    const customRange = document.getElementById('customDateRange');
+    if (this.value === 'custom') {
+        customRange.style.display = 'block';
+    } else {
+        customRange.style.display = 'none';
+    }
+});
+
+function generateReport() {
+    const courseId = document.getElementById('courseFilter').value;
+    const dateRange = document.getElementById('dateRange').value;
+    const reportType = document.getElementById('reportType').value;
+    const exportFormat = document.getElementById('exportFormat').value;
+    
+    let startDate = '';
+    let endDate = '';
+    
+    if (dateRange === 'custom') {
+        startDate = document.getElementById('startDate').value;
+        endDate = document.getElementById('endDate').value;
+        
+        if (!startDate || !endDate) {
+            alert('Please select both start and end dates for custom range.');
+            return;
+        }
+    }
+    
+    // Show loading
+    document.getElementById('reportContent').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Generating report...</p>
+        </div>
+    `;
+    
+    // Build query parameters
+    const params = new URLSearchParams({
+        course_id: courseId,
+        date_range: dateRange,
+        report_type: reportType,
+        format: exportFormat
+    });
+    
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    // Fetch report data
+    fetch(`/teacher/attendance/report?${params.toString()}`)
+        .then(response => {
+            if (exportFormat !== 'html') {
+                // For non-HTML formats, trigger download
+                return response.blob().then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `attendance_report.${exportFormat}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    // Reset content
+                    document.getElementById('reportContent').innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-download"></i> Report downloaded successfully!
+                        </div>
+                    `;
+                });
+            } else {
+                return response.json();
+            }
+        })
+        .then(data => {
+            if (exportFormat === 'html' && data) {
+                displayReport(data);
+                updateStats(data.stats);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('reportContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i> Error generating report. Please try again.
+                </div>
+            `;
+        });
+}
+
+function displayReport(data) {
+    let html = '';
+    
+    if (data.report_type === 'summary') {
+        html = generateSummaryReport(data);
+    } else if (data.report_type === 'detailed') {
+        html = generateDetailedReport(data);
+    } else if (data.report_type === 'trends') {
+        html = generateTrendsReport(data);
+    }
+    
+    document.getElementById('reportContent').innerHTML = html;
+}
+
+function generateSummaryReport(data) {
+    let html = '<h6>Attendance Summary Report</h6>';
+    
+    if (data.courses && data.courses.length > 0) {
+        html += '<div class="table-responsive"><table class="table table-striped">';
+        html += '<thead><tr><th>Course</th><th>Total Lectures</th><th>Avg Attendance</th><th>Total Students</th></tr></thead>';
+        html += '<tbody>';
+        
+        data.courses.forEach(course => {
+            html += `<tr>
+                <td><strong>${course.code}</strong><br><small>${course.name}</small></td>
+                <td>${course.total_lectures}</td>
+                <td><span class="badge bg-${course.avg_attendance >= 75 ? 'success' : course.avg_attendance >= 50 ? 'warning' : 'danger'}">${course.avg_attendance}%</span></td>
+                <td>${course.total_students}</td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table></div>';
+    } else {
+        html += '<div class="alert alert-info">No data available for the selected criteria.</div>';
+    }
+    
+    return html;
+}
+
+function generateDetailedReport(data) {
+    let html = '<h6>Detailed Attendance Report</h6>';
+    
+    if (data.lectures && data.lectures.length > 0) {
+        html += '<div class="table-responsive"><table class="table table-striped">';
+        html += '<thead><tr><th>Date</th><th>Course</th><th>Lecture</th><th>Present</th><th>Absent</th><th>Late</th><th>Rate</th></tr></thead>';
+        html += '<tbody>';
+        
+        data.lectures.forEach(lecture => {
+            html += `<tr>
+                <td>${new Date(lecture.date).toLocaleDateString()}</td>
+                <td>${lecture.course_code}</td>
+                <td>${lecture.title}</td>
+                <td><span class="badge bg-success">${lecture.present}</span></td>
+                <td><span class="badge bg-danger">${lecture.absent}</span></td>
+                <td><span class="badge bg-warning">${lecture.late}</span></td>
+                <td>${lecture.attendance_rate}%</td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table></div>';
+    } else {
+        html += '<div class="alert alert-info">No lectures found for the selected criteria.</div>';
+    }
+    
+    return html;
+}
+
+function generateTrendsReport(data) {
+    let html = '<h6>Attendance Trends Report</h6>';
+    html += '<div class="alert alert-info"><i class="fas fa-info-circle"></i> Trends visualization would be implemented here with charts.</div>';
+    return html;
+}
+
+function updateStats(stats) {
+    if (stats) {
+        document.getElementById('totalLectures').textContent = stats.total_lectures || '-';
+        document.getElementById('avgAttendance').textContent = stats.avg_attendance ? stats.avg_attendance + '%' : '-';
+        document.getElementById('totalStudents').textContent = stats.total_students || '-';
+    }
+}
+
+function refreshReport() {
+    generateReport();
+}
+
+// Generate initial report
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default dates
+    const today = new Date();
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    document.getElementById('endDate').value = today.toISOString().split('T')[0];
+    document.getElementById('startDate').value = weekAgo.toISOString().split('T')[0];
+});
+</script>
+{% endblock %}

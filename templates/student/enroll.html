@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Enroll in Course - Student{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('student.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('student.courses') }}">Courses</a></li>
+                <li class="breadcrumb-item active">Enroll</li>
+            </ol>
+        </nav>
+        
+        <h2><i class="fas fa-plus"></i> Enroll in Course</h2>
+        <p class="text-muted">Enter the course code to enroll in a new course</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-edit"></i> Course Enrollment</h5>
+            </div>
+            <div class="card-body">
+                {% if error %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> {{ error }}
+                    </div>
+                {% endif %}
+                
+                {% if success %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i> {{ success }}
+                        <div class="mt-2">
+                            <a href="{{ url_for('student.courses') }}" class="btn btn-sm btn-success">
+                                <i class="fas fa-eye"></i> View My Courses
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="course_code" class="form-label">Course Code *</label>
+                        <input type="text" class="form-control" id="course_code" name="course_code" 
+                               placeholder="e.g., CS101" required>
+                        <div class="form-text">Enter the exact course code provided by your instructor</div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('student.courses') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Courses
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Enroll
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> How to Enroll</h5>
+            </div>
+            <div class="card-body">
+                <ol class="list-group list-group-numbered">
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">Get Course Code</div>
+                            Ask your instructor for the exact course code
+                        </div>
+                        <span class="badge bg-primary rounded-pill">1</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">Enter Code</div>
+                            Type the course code in the form (case-sensitive)
+                        </div>
+                        <span class="badge bg-primary rounded-pill">2</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">Confirm Enrollment</div>
+                            Click enroll and you'll be added to the course
+                        </div>
+                        <span class="badge bg-primary rounded-pill">3</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-start">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">Start Attending</div>
+                            Use location-based check-in for lectures
+                        </div>
+                        <span class="badge bg-primary rounded-pill">4</span>
+                    </li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5><i class="fas fa-question-circle"></i> Need Help?</h5>
+            </div>
+            <div class="card-body">
+                <p class="card-text">If you're having trouble enrolling:</p>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success"></i> Verify the course code with your instructor</li>
+                    <li><i class="fas fa-check text-success"></i> Make sure the course is currently active</li>
+                    <li><i class="fas fa-check text-success"></i> Check if you're already enrolled</li>
+                    <li><i class="fas fa-check text-success"></i> Contact support if issues persist</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}Student Dashboard - Geo Attendance Pro{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-tachometer-alt"></i> Student Dashboard</h2>
+        <p class="text-muted">Welcome back, {{ current_user.full_name }}!</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Enrolled Courses</h5>
+                        <h3>{{ enrollments|length }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-book fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Today's Lectures</h5>
+                        <h3 id="activeLecturesCount">{{ active_lectures_count }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chalkboard fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Avg Attendance</h5>
+                        <h3>{{ "%.1f"|format(attendance_percentage) }}%</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Lectures Section -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-broadcast-tower"></i> Active Lectures</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="refreshLectures()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="activeLectures">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading active lectures...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Lectures -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-broadcast-tower"></i> Active Lectures</h5>
+                <a href="{{ url_for('student.active_lectures') }}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-eye"></i> View All
+                </a>
+            </div>
+            <div class="card-body">
+                <div id="activeLectures">
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin"></i> Loading active lectures...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Attendance -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-history"></i> Recent Attendance</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_attendance %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Course</th>
+                                    <th>Lecture</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for attendance in recent_attendance %}
+                                <tr>
+                                    <td>{{ attendance.lecture.course.code }}</td>
+                                    <td>{{ attendance.lecture.title }}</td>
+                                    <td>{{ attendance.marked_at.strftime('%Y-%m-%d %H:%M') if attendance.marked_at else 'N/A' }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'danger' if attendance.status == 'absent' else 'warning' }}">
+                                            {{ attendance.status.title() }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No recent attendance records found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Location Check-in Modal -->
+<div class="modal fade" id="checkinModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Check-in to Lecture</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="locationStatus" class="alert alert-info">
+                    <i class="fas fa-spinner fa-spin"></i> Getting your location...
+                </div>
+                <div id="lectureInfo" style="display: none;">
+                    <h6 id="lectureTitle"></h6>
+                    <p id="courseInfo" class="text-muted"></p>
+                    <p><strong>Distance:</strong> <span id="distance"></span> meters</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmCheckin" disabled>
+                    <i class="fas fa-map-marker-alt"></i> Check In
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentLecture = null;
+let userLocation = null;
+
+// Load active lectures on page load
+document.addEventListener('DOMContentLoaded', function() {
+    refreshLectures();
+});
+
+function refreshLectures() {
+    fetch('/student/api/active-lectures')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('activeLecturesCount').textContent = data.count;
+            displayLectures(data.lectures || []);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+function displayLectures(lectures) {
+    const container = document.getElementById('activeLectures');
+    
+    if (lectures.length === 0) {
+        container.innerHTML = '<div class="alert alert-info text-center"><i class="fas fa-info-circle"></i> No active lectures available for check-in at the moment.</div>';
+        return;
+    }
+    
+    let html = '<div class="row">';
+    lectures.forEach(lecture => {
+        const startTime = new Date(lecture.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const endTime = new Date(lecture.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        
+        html += `
+            <div class="col-md-6 mb-3">
+                <div class="card border-success">
+                    <div class="card-body">
+                        <h6 class="card-title">${lecture.title}</h6>
+                        <p class="card-text text-muted">${lecture.course_code} - ${lecture.course_name}</p>
+                        <p class="small text-muted">
+                            <i class="fas fa-clock"></i> ${startTime} - ${endTime}
+                        </p>
+                        ${lecture.location.name ? `<p class="small text-muted"><i class="fas fa-map-marker-alt"></i> ${lecture.location.name}</p>` : ''}
+                        <div class="d-grid gap-2">
+                            <a href="/student/lecture/${lecture.id}/enhanced-checkin" class="btn btn-success btn-sm">
+                                <i class="fas fa-shield-alt"></i> Secure Check-in
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+function initiateCheckin(lectureId) {
+    // Redirect to active lectures page for check-in
+    window.location.href = '/student/active-lectures';
+}
+
+function showCheckinModal() {
+    const modal = new bootstrap.Modal(document.getElementById('checkinModal'));
+    modal.show();
+    
+    // Update lecture info
+    document.getElementById('lectureTitle').textContent = currentLecture.title;
+    document.getElementById('courseInfo').textContent = currentLecture.course_name;
+    
+    // Get user location
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                userLocation = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                };
+                
+                // Calculate distance
+                const distance = calculateDistance(
+                    userLocation.latitude, userLocation.longitude,
+                    currentLecture.location.latitude, currentLecture.location.longitude
+                );
+                
+                document.getElementById('distance').textContent = Math.round(distance);
+                document.getElementById('lectureInfo').style.display = 'block';
+                
+                if (distance <= currentLecture.location.radius) {
+                    document.getElementById('locationStatus').className = 'alert alert-success';
+                    document.getElementById('locationStatus').innerHTML = 
+                        '<i class="fas fa-check-circle"></i> You are within the lecture area!';
+                    document.getElementById('confirmCheckin').disabled = false;
+                } else {
+                    document.getElementById('locationStatus').className = 'alert alert-warning';
+                    document.getElementById('locationStatus').innerHTML = 
+                        '<i class="fas fa-exclamation-triangle"></i> You are too far from the lecture location.';
+                }
+            },
+            error => {
+                document.getElementById('locationStatus').className = 'alert alert-danger';
+                document.getElementById('locationStatus').innerHTML = 
+                    '<i class="fas fa-times-circle"></i> Unable to get your location. Please enable location services.';
+            }
+        );
+    } else {
+        document.getElementById('locationStatus').className = 'alert alert-danger';
+        document.getElementById('locationStatus').innerHTML = 
+            '<i class="fas fa-times-circle"></i> Geolocation is not supported by this browser.';
+    }
+}
+
+document.getElementById('confirmCheckin').addEventListener('click', function() {
+    if (!userLocation || !currentLecture) return;
+    
+    fetch('/student/api/checkin', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            lecture_id: currentLecture.id,
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            alert('Check-in successful!');
+            bootstrap.Modal.getInstance(document.getElementById('checkinModal')).hide();
+            refreshLectures();
+        } else {
+            alert('Check-in failed: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Check-in failed. Please try again.');
+    });
+});
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Geo Attendance Pro{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card">
+            <div class="card-header text-center">
+                <h4><i class="fas fa-user-plus"></i> Register</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="first_name" class="form-label">First Name</label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="last_name" class="form-label">Last Name</label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="role" class="form-label">Role</label>
+                        <select class="form-select" id="role" name="role" required onchange="toggleIdFields()">
+                            <option value="">Select Role</option>
+                            <option value="student">Student</option>
+                            <option value="teacher">Teacher</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3" id="student_id_field" style="display: none;">
+                        <label for="student_id" class="form-label">Student ID</label>
+                        <input type="text" class="form-control" id="student_id" name="student_id">
+                    </div>
+                    
+                    <div class="mb-3" id="employee_id_field" style="display: none;">
+                        <label for="employee_id" class="form-label">Employee ID</label>
+                        <input type="text" class="form-control" id="employee_id" name="employee_id">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">Phone (Optional)</label>
+                        <input type="tel" class="form-control" id="phone" name="phone">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-user-plus"></i> Register
+                    </button>
+                </form>
+                
+                <div class="text-center mt-3">
+                    <p>Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleIdFields() {
+    const role = document.getElementById('role').value;
+    const studentField = document.getElementById('student_id_field');
+    const employeeField = document.getElementById('employee_id_field');
+    
+    if (role === 'student') {
+        studentField.style.display = 'block';
+        employeeField.style.display = 'none';
+    } else if (role === 'teacher') {
+        studentField.style.display = 'none';
+        employeeField.style.display = 'block';
+    } else {
+        studentField.style.display = 'none';
+        employeeField.style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

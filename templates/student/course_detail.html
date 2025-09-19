@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course.name }} - Student{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('student.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('student.courses') }}">Courses</a></li>
+                <li class="breadcrumb-item active">{{ course.code }}</li>
+            </ol>
+        </nav>
+        
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-book"></i> {{ course.code }} - {{ course.name }}</h2>
+                <p class="text-muted">{{ course.description or 'No description available' }}</p>
+            </div>
+            <div>
+                <span class="badge bg-primary fs-6">{{ course.credits }} Credits</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3>{{ lectures|length }}</h3>
+                <p class="mb-0">Total Lectures</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ enrollment.get_attendance_percentage() }}%</h3>
+                <p class="mb-0">Attendance Rate</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ course.teacher.full_name if course.teacher else 'N/A' }}</h3>
+                <p class="mb-0">Instructor</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3>{{ course.semester }}</h3>
+                <p class="mb-0">Semester</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-list"></i> Lecture History</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="filterLectures('all')">All</button>
+                    <button class="btn btn-sm btn-outline-success" onclick="filterLectures('present')">Present</button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="filterLectures('absent')">Absent</button>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if lectures %}
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="lecturesTable">
+                            <thead>
+                                <tr>
+                                    <th>Lecture</th>
+                                    <th>Date & Time</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                    <th>Attendance</th>
+                                    <th>Marked At</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for lecture in lectures %}
+                                {% set attendance = attendance_dict.get(lecture.id) %}
+                                <tr data-status="{{ attendance.status if attendance else 'absent' }}">
+                                    <td>
+                                        <strong>{{ lecture.title }}</strong>
+                                        {% if lecture.description %}
+                                            <br><small class="text-muted">{{ lecture.description[:50] }}{% if lecture.description|length > 50 %}...{% endif %}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ lecture.scheduled_start.strftime('%Y-%m-%d') }}<br>
+                                        <small>{{ lecture.scheduled_start.strftime('%H:%M') }} - {{ lecture.scheduled_end.strftime('%H:%M') }}</small>
+                                    </td>
+                                    <td>{{ lecture.location_name or 'Not specified' }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if lecture.status == 'completed' else 'primary' if lecture.status == 'active' else 'warning' if lecture.status == 'scheduled' else 'secondary' }}">
+                                            {{ lecture.status.title() }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if attendance %}
+                                            <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'warning' if attendance.status == 'late' else 'danger' if attendance.status == 'absent' else 'info' }}">
+                                                {{ attendance.status.title() }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Not marked</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if attendance and attendance.marked_at %}
+                                            {{ attendance.marked_at.strftime('%H:%M:%S') }}
+                                            {% if attendance.distance_from_lecture %}
+                                                <br><small class="text-muted">{{ "%.1f"|format(attendance.distance_from_lecture) }}m away</small>
+                                            {% endif %}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> No lectures scheduled for this course yet.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if lectures %}
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie"></i> Attendance Breakdown</h5>
+            </div>
+            <div class="card-body">
+                {% set present_count = attendance_dict.values() | selectattr('status', 'equalto', 'present') | list | length %}
+                {% set late_count = attendance_dict.values() | selectattr('status', 'equalto', 'late') | list | length %}
+                {% set absent_count = lectures|length - present_count - late_count %}
+                
+                <div class="progress mb-3" style="height: 30px;">
+                    <div class="progress-bar bg-success" style="width: {{ (present_count / lectures|length * 100) if lectures|length > 0 else 0 }}%">
+                        Present: {{ present_count }}
+                    </div>
+                    <div class="progress-bar bg-warning" style="width: {{ (late_count / lectures|length * 100) if lectures|length > 0 else 0 }}%">
+                        Late: {{ late_count }}
+                    </div>
+                    <div class="progress-bar bg-danger" style="width: {{ (absent_count / lectures|length * 100) if lectures|length > 0 else 0 }}%">
+                        Absent: {{ absent_count }}
+                    </div>
+                </div>
+                
+                <div class="row text-center">
+                    <div class="col-4">
+                        <h5 class="text-success">{{ present_count }}</h5>
+                        <small>Present</small>
+                    </div>
+                    <div class="col-4">
+                        <h5 class="text-warning">{{ late_count }}</h5>
+                        <small>Late</small>
+                    </div>
+                    <div class="col-4">
+                        <h5 class="text-danger">{{ absent_count }}</h5>
+                        <small>Absent</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Course Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <td><strong>Course Code:</strong></td>
+                        <td>{{ course.code }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Credits:</strong></td>
+                        <td>{{ course.credits }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Semester:</strong></td>
+                        <td>{{ course.semester }} {{ course.academic_year }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Instructor:</strong></td>
+                        <td>{{ course.teacher.full_name if course.teacher else 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Enrolled:</strong></td>
+                        <td>{{ enrollment.enrollment_date.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Current Grade:</strong></td>
+                        <td>
+                            {% if enrollment.grade %}
+                                <span class="badge bg-primary">{{ enrollment.grade }}</span>
+                            {% else %}
+                                <span class="text-muted">Not graded</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterLectures(status) {
+    const rows = document.querySelectorAll('#lecturesTable tbody tr');
+    
+    rows.forEach(row => {
+        if (status === 'all') {
+            row.style.display = '';
+        } else {
+            const rowStatus = row.getAttribute('data-status');
+            row.style.display = rowStatus === status ? '' : 'none';
+        }
+    });
+    
+    // Update button states
+    document.querySelectorAll('.btn-outline-primary, .btn-outline-success, .btn-outline-danger').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    if (status === 'all') {
+        document.querySelector('.btn-outline-primary').classList.add('active');
+    } else if (status === 'present') {
+        document.querySelector('.btn-outline-success').classList.add('active');
+    } else if (status === 'absent') {
+        document.querySelector('.btn-outline-danger').classList.add('active');
+    }
+}
+
+// Set default filter
+document.addEventListener('DOMContentLoaded', function() {
+    filterLectures('all');
+});
+</script>
+{% endblock %}

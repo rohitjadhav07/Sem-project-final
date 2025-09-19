@@ -1,0 +1,102 @@
+<!-- Location Permission Guide Modal -->
+<div class="modal fade" id="locationPermissionModal" tabindex="-1" aria-labelledby="locationPermissionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="locationPermissionModalLabel">
+                    <i class="fas fa-map-marker-alt"></i> Enable Location Access
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Location Access Required</h6>
+                    <p>This application needs access to your device's location to verify your attendance. Your location data is only used for attendance verification and is not shared with third parties.</p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fab fa-chrome"></i> Chrome / Edge</h6>
+                        <ol class="small">
+                            <li>Click the <i class="fas fa-lock"></i> lock icon in the address bar</li>
+                            <li>Set "Location" to "Allow"</li>
+                            <li>Refresh the page</li>
+                            <li>Click "Allow" when prompted</li>
+                        </ol>
+                        <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzMzMyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNocm9tZSBHdWlkZTwvdGV4dD48L3N2Zz4=" class="img-fluid border rounded" alt="Chrome Location Guide">
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fab fa-firefox"></i> Firefox</h6>
+                        <ol class="small">
+                            <li>Click the <i class="fas fa-shield-alt"></i> shield icon in the address bar</li>
+                            <li>Click "Allow Location Access"</li>
+                            <li>Or go to Settings > Privacy & Security > Permissions</li>
+                            <li>Add this site to location exceptions</li>
+                        </ol>
+                        <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzMzMyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkZpcmVmb3ggR3VpZGU8L3RleHQ+PC9zdmc+" class="img-fluid border rounded" alt="Firefox Location Guide">
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6><i class="fab fa-safari"></i> Safari (Mobile)</h6>
+                        <ol class="small">
+                            <li>Go to Settings > Privacy & Security</li>
+                            <li>Tap "Location Services"</li>
+                            <li>Find Safari and enable location</li>
+                            <li>Return to the app and try again</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fab fa-android"></i> Android Chrome</h6>
+                        <ol class="small">
+                            <li>Tap the <i class="fas fa-lock"></i> lock icon in address bar</li>
+                            <li>Tap "Permissions"</li>
+                            <li>Enable "Location"</li>
+                            <li>Refresh the page</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3">
+                    <h6><i class="fas fa-lightbulb"></i> Troubleshooting Tips</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>Still not working?</strong> Try refreshing the page after enabling location</li>
+                        <li><strong>Using incognito/private mode?</strong> Location may be blocked by default</li>
+                        <li><strong>On a computer?</strong> Make sure WiFi is enabled for better location accuracy</li>
+                        <li><strong>GPS issues?</strong> Try moving to an area with better signal (near windows, outdoors)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="retryLocationAccess()">
+                    <i class="fas fa-redo"></i> Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showLocationPermissionGuide() {
+    const modal = new bootstrap.Modal(document.getElementById('locationPermissionModal'));
+    modal.show();
+}
+
+function retryLocationAccess() {
+    // Close the modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('locationPermissionModal'));
+    modal.hide();
+    
+    // Retry location access
+    if (typeof startLocationVerification === 'function') {
+        startLocationVerification();
+    } else if (typeof performLocationCheck === 'function') {
+        performLocationCheck();
+    } else {
+        // Fallback - reload the page
+        window.location.reload();
+    }
+}
+</script>

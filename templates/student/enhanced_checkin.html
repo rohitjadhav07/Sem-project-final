@@ -1,0 +1,758 @@
+{% extends "base.html" %}
+
+{% block title %}Enhanced Check-in - {{ lecture.title }}{% endblock %}
+
+{% block head %}
+<script src="{{ url_for('static', filename='js/location-handler.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4><i class="fas fa-map-marker-alt"></i> Enhanced Location Check-in</h4>
+                    <p class="mb-0">{{ lecture.title }} - {{ lecture.course.code }}</p>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Security Notice -->
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-shield-alt"></i> Secure Attendance System</h6>
+                        <ul class="mb-0">
+                            <li>Your location will be verified with high precision</li>
+                            <li>You must be within {{ lecture.geofence_radius }}m of the lecture location</li>
+                            <li>Multiple location checks will be performed for security</li>
+                            <li>Attendance cannot be marked remotely or spoofed</li>
+                        </ul>
+                    </div>
+
+                    <!-- Lecture Information -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-info-circle"></i> Lecture Details</h6>
+                                    <p><strong>Course:</strong> {{ lecture.course.name }}</p>
+                                    <p><strong>Time:</strong> {{ lecture.scheduled_start.strftime('%Y-%m-%d %H:%M') }}</p>
+                                    <p><strong>Status:</strong> 
+                                        <span class="badge badge-{{ 'success' if lecture.status == 'active' else 'warning' }}">
+                                            {{ lecture.status|title }}
+                                        </span>
+                                    </p>
+                                    {% if lecture.location_name %}
+                                    <p><strong>Location:</strong> {{ lecture.location_name }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-crosshairs"></i> Location Requirements</h6>
+                                    <p><strong>Required Accuracy:</strong> ≤ 15m</p>
+                                    <p><strong>Geofence Radius:</strong> {{ lecture.geofence_radius }}m</p>
+                                    <p><strong>Verification Level:</strong> High Security</p>
+                                    <p><strong>Multiple Checks:</strong> Required</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Initial Location Check -->
+                    <div class="step-container" id="step1">
+                        <h5><i class="fas fa-crosshairs"></i> Step 1: Verify Your Location</h5>
+                        <p>Please ensure you are physically present at the lecture location.</p>
+                        
+                        <div class="text-center">
+                            <button class="btn btn-primary btn-lg" onclick="startLocationVerification()">
+                                <i class="fas fa-map-marker-alt"></i> Start Location Verification
+                            </button>
+                        </div>
+                        
+                        <!-- Location Status -->
+                        <div id="locationStatus" class="mt-3" style="display: none;"></div>
+                    </div>
+
+                    <!-- Step 2: Location Analysis -->
+                    <div class="step-container" id="step2" style="display: none;">
+                        <h5><i class="fas fa-search"></i> Step 2: Location Analysis</h5>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>Your Location</h6>
+                                        <p><strong>Coordinates:</strong> <span id="studentCoords">-</span></p>
+                                        <p><strong>Accuracy:</strong> <span id="studentAccuracy">-</span></p>
+                                        <p><strong>Distance to Lecture:</strong> <span id="distanceToLecture">-</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>Verification Status</h6>
+                                        <p><strong>GPS Signal:</strong> <span id="gpsSignal">-</span></p>
+                                        <p><strong>Security Score:</strong> <span id="securityScore">-</span></p>
+                                        <p><strong>Within Geofence:</strong> <span id="geofenceStatus">-</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3" id="step2Actions" style="display: none;">
+                            <button class="btn btn-success" onclick="proceedToConfirmation()" id="proceedBtn">
+                                <i class="fas fa-arrow-right"></i> Proceed to Final Verification
+                            </button>
+                            <button class="btn btn-outline-warning ml-2" onclick="retryLocationCheck()">
+                                <i class="fas fa-redo"></i> Retry Location Check
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Final Verification -->
+                    <div class="step-container" id="step3" style="display: none;">
+                        <h5><i class="fas fa-check-double"></i> Step 3: Final Verification</h5>
+                        <p>Please confirm your attendance by capturing your location one more time.</p>
+                        
+                        <div class="verification-progress mb-3">
+                            <div class="progress">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: 0%" id="verificationProgress">
+                                    Verification in progress...
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="verificationResults" class="mb-3">
+                            <!-- Verification results will be displayed here -->
+                        </div>
+                        
+                        <div class="text-center">
+                            <button class="btn btn-success btn-lg" onclick="finalLocationCheck()" id="finalCheckBtn">
+                                <i class="fas fa-check"></i> Confirm Attendance
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Success -->
+                    <div class="step-container" id="step4" style="display: none;">
+                        <div class="text-center">
+                            <div class="alert alert-success">
+                                <h4><i class="fas fa-check-circle"></i> Attendance Marked Successfully!</h4>
+                                <p>Your attendance has been recorded with high security verification.</p>
+                                <div id="attendanceDetails"></div>
+                            </div>
+                            <a href="{{ url_for('student.active_lectures') }}" class="btn btn-primary">
+                                <i class="fas fa-arrow-left"></i> Back to Lectures
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let locationData = {
+    checks: [],
+    finalLocation: null,
+    securityInfo: {},
+    lectureId: {{ lecture.id }}
+};
+
+const maxAccuracyAllowed = 15; // meters
+const requiredDistance = {{ lecture.geofence_radius }}; // meters
+let checkCount = 0;
+
+async function startLocationVerification() {
+    try {
+        // Use the enhanced location handler
+        const position = await window.locationHandler.requestLocationWithUI(
+            (message, type, errorInfo) => {
+                showLocationStatus(message, type);
+                
+                if (type === 'error' && errorInfo) {
+                    // Show help button for permission errors
+                    if (errorInfo.type === 'PERMISSION_DENIED') {
+                        showLocationPermissionDenied();
+                    }
+                }
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 30000,
+                maximumAge: 0
+            }
+        );
+        
+        // Process the successful location
+        processLocationCheck(position);
+        
+    } catch (error) {
+        console.error('Location verification failed:', error);
+        
+        if (error.type === 'PERMISSION_DENIED') {
+            showLocationPermissionDenied();
+        } else {
+            handleLocationError(error);
+        }
+    }
+}
+
+function showLocationPermissionDenied() {
+    showLocationStatus('Location access is blocked. Click the button below for instructions on how to enable it.', 'danger');
+    
+    // Add a help button
+    const statusDiv = document.getElementById('locationStatus');
+    statusDiv.innerHTML += `
+        <div class="mt-2">
+            <button class="btn btn-info btn-sm" onclick="showLocationPermissionGuide()">
+                <i class="fas fa-question-circle"></i> How to Enable Location Access
+            </button>
+            <button class="btn btn-warning btn-sm ml-2" onclick="retryLocationAccess()">
+                <i class="fas fa-redo"></i> Try Again
+            </button>
+        </div>
+    `;
+}
+
+function performLocationCheck() {
+    showLocationStatus('Getting your precise location...', 'info');
+    
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 30000,
+        maximumAge: 0
+    };
+    
+    navigator.geolocation.getCurrentPosition(
+        function(position) {
+            processLocationCheck(position);
+        },
+        function(error) {
+            handleLocationError(error);
+        },
+        options
+    );
+}
+
+function processLocationCheck(position) {
+    const check = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        altitude: position.coords.altitude,
+        heading: position.coords.heading,
+        speed: position.coords.speed,
+        timestamp: new Date().toISOString()
+    };
+    
+    locationData.checks.push(check);
+    checkCount++;
+    
+    // Calculate distance to lecture location
+    const lectureLocation = {
+        latitude: {{ lecture.latitude }},
+        longitude: {{ lecture.longitude }}
+    };
+    
+    const distance = calculateDistance(
+        check.latitude, check.longitude,
+        lectureLocation.latitude, lectureLocation.longitude
+    );
+    
+    // Analyze location data
+    analyzeLocation(check, distance);
+    
+    // Update UI
+    updateLocationDisplay(check, distance);
+    
+    // Show step 2
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+}
+
+function analyzeLocation(check, distance) {
+    let securityScore = 100;
+    let issues = [];
+    
+    // Accuracy check
+    if (check.accuracy > maxAccuracyAllowed) {
+        securityScore -= 40;
+        issues.push('poor_accuracy');
+    } else if (check.accuracy > 10) {
+        securityScore -= 20;
+    }
+    
+    // Distance check
+    if (distance > requiredDistance) {
+        securityScore -= 50;
+        issues.push('outside_geofence');
+    }
+    
+    // Speed check (should be stationary)
+    if (check.speed && check.speed > 2) {
+        securityScore -= 25;
+        issues.push('moving_too_fast');
+    }
+    
+    // Device capabilities
+    if (!check.altitude) securityScore -= 5;
+    if (!check.heading) securityScore -= 5;
+    
+    locationData.securityInfo = {
+        score: Math.max(0, securityScore),
+        issues: issues,
+        distance: distance,
+        withinGeofence: distance <= requiredDistance,
+        accuracyAcceptable: check.accuracy <= maxAccuracyAllowed
+    };
+}
+
+function updateLocationDisplay(check, distance) {
+    document.getElementById('studentCoords').textContent = 
+        `${check.latitude.toFixed(6)}, ${check.longitude.toFixed(6)}`;
+    document.getElementById('studentAccuracy').textContent = `±${Math.round(check.accuracy)}m`;
+    document.getElementById('distanceToLecture').textContent = `${distance.toFixed(1)}m`;
+    
+    // GPS Signal quality
+    const signalQuality = check.accuracy <= 5 ? 'Excellent' : 
+                         check.accuracy <= 10 ? 'Good' : 
+                         check.accuracy <= 15 ? 'Fair' : 'Poor';
+    document.getElementById('gpsSignal').textContent = signalQuality;
+    
+    // Security score
+    const score = locationData.securityInfo.score;
+    document.getElementById('securityScore').innerHTML = 
+        `<span class="badge badge-${score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger'}">${score}%</span>`;
+    
+    // Geofence status
+    const withinGeofence = locationData.securityInfo.withinGeofence;
+    document.getElementById('geofenceStatus').innerHTML = 
+        `<span class="badge badge-${withinGeofence ? 'success' : 'danger'}">${withinGeofence ? 'Yes' : 'No'}</span>`;
+    
+    // Show results and actions
+    setTimeout(() => {
+        if (locationData.securityInfo.withinGeofence && locationData.securityInfo.accuracyAcceptable) {
+            showLocationStatus('Location verified successfully! You are within the required area.', 'success');
+            document.getElementById('step2Actions').style.display = 'block';
+        } else {
+            let errorMsg = 'Location verification failed: ';
+            if (!locationData.securityInfo.withinGeofence) {
+                errorMsg += `You are ${distance.toFixed(1)}m away from the lecture location. `;
+            }
+            if (!locationData.securityInfo.accuracyAcceptable) {
+                errorMsg += `GPS accuracy is ${Math.round(check.accuracy)}m (required: ≤${maxAccuracyAllowed}m). `;
+            }
+            errorMsg += 'Please move closer to the lecture location and ensure you have a clear GPS signal.';
+            
+            showLocationStatus(errorMsg, 'danger');
+            document.getElementById('step2Actions').style.display = 'block';
+        }
+    }, 1000);
+}
+
+function proceedToConfirmation() {
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'block';
+    
+    // Start progress animation
+    let progress = 0;
+    const progressBar = document.getElementById('verificationProgress');
+    const interval = setInterval(() => {
+        progress += 10;
+        progressBar.style.width = `${progress}%`;
+        if (progress >= 100) {
+            clearInterval(interval);
+            progressBar.textContent = 'Ready for final verification';
+        }
+    }, 200);
+}
+
+function finalLocationCheck() {
+    document.getElementById('finalCheckBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+    document.getElementById('finalCheckBtn').disabled = true;
+    
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0
+    };
+    
+    navigator.geolocation.getCurrentPosition(
+        function(position) {
+            processFinalCheck(position);
+        },
+        function(error) {
+            document.getElementById('finalCheckBtn').innerHTML = '<i class="fas fa-check"></i> Confirm Attendance';
+            document.getElementById('finalCheckBtn').disabled = false;
+            handleLocationError(error);
+        },
+        options
+    );
+}
+
+function processFinalCheck(position) {
+    const finalCheck = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        timestamp: new Date().toISOString()
+    };
+    
+    // Compare with initial check
+    const initialCheck = locationData.checks[0];
+    const consistency = calculateDistance(
+        initialCheck.latitude, initialCheck.longitude,
+        finalCheck.latitude, finalCheck.longitude
+    );
+    
+    // Calculate final distance to lecture
+    const lectureLocation = {
+        latitude: {{ lecture.latitude }},
+        longitude: {{ lecture.longitude }}
+    };
+    
+    const finalDistance = calculateDistance(
+        finalCheck.latitude, finalCheck.longitude,
+        lectureLocation.latitude, lectureLocation.longitude
+    );
+    
+    // Prepare attendance data
+    const attendanceData = {
+        lecture_id: locationData.lectureId,
+        latitude: finalCheck.latitude,
+        longitude: finalCheck.longitude,
+        metadata: JSON.stringify({
+            checks: locationData.checks.length + 1,
+            finalAccuracy: finalCheck.accuracy,
+            consistency: consistency,
+            securityScore: locationData.securityInfo.score,
+            deviceInfo: getDeviceInfo(),
+            timestamp: finalCheck.timestamp
+        })
+    };
+    
+    // Submit attendance
+    fetch('/student/api/checkin', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(attendanceData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAttendanceSuccess(data, finalDistance);
+        } else {
+            showAttendanceError(data);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAttendanceError({message: 'Network error occurred'});
+    });
+}
+
+function showAttendanceSuccess(data, distance) {
+    document.getElementById('step3').style.display = 'none';
+    document.getElementById('step4').style.display = 'block';
+    
+    const detailsHtml = `
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <small><strong>Distance:</strong> ${distance.toFixed(1)}m</small>
+            </div>
+            <div class="col-md-6">
+                <small><strong>Security Score:</strong> ${data.security_score || locationData.securityInfo.score}%</small>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6">
+                <small><strong>Accuracy:</strong> ${data.accuracy || 'High Precision'}</small>
+            </div>
+            <div class="col-md-6">
+                <small><strong>Time:</strong> ${new Date().toLocaleString()}</small>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('attendanceDetails').innerHTML = detailsHtml;
+}
+
+function showAttendanceError(data) {
+    document.getElementById('finalCheckBtn').innerHTML = '<i class="fas fa-check"></i> Confirm Attendance';
+    document.getElementById('finalCheckBtn').disabled = false;
+    
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'alert alert-danger';
+    errorDiv.innerHTML = `<strong>Attendance Failed:</strong> ${data.message}`;
+    
+    document.getElementById('verificationResults').appendChild(errorDiv);
+}
+
+function retryLocationCheck() {
+    // Reset and start over
+    locationData.checks = [];
+    locationData.securityInfo = {};
+    checkCount = 0;
+    
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step1').style.display = 'block';
+    
+    document.getElementById('locationStatus').style.display = 'none';
+    document.getElementById('step2Actions').style.display = 'none';
+}
+
+function handleLocationError(error) {
+    let errorMessage = '';
+    let showHelpButton = false;
+    
+    switch(error.code) {
+        case error.PERMISSION_DENIED:
+            errorMessage = 'Location access denied. You need to allow location access to mark attendance.';
+            showHelpButton = true;
+            break;
+        case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Location unavailable. Please ensure GPS is enabled and try moving to an area with better signal (near windows or outdoors).';
+            break;
+        case error.TIMEOUT:
+            errorMessage = 'Location request timed out. This might be due to poor GPS signal. Please try again.';
+            break;
+        default:
+            errorMessage = `Location error: ${error.message}`;
+            break;
+    }
+    
+    showLocationStatus(errorMessage, 'danger');
+    
+    if (showHelpButton || error.code === error.PERMISSION_DENIED) {
+        // Add help and retry buttons
+        const statusDiv = document.getElementById('locationStatus');
+        statusDiv.innerHTML += `
+            <div class="mt-3">
+                <button class="btn btn-info btn-sm" onclick="showLocationPermissionGuide()">
+                    <i class="fas fa-question-circle"></i> How to Enable Location
+                </button>
+                <button class="btn btn-warning btn-sm ml-2" onclick="retryLocationAccess()">
+                    <i class="fas fa-redo"></i> Try Again
+                </button>
+                <button class="btn btn-secondary btn-sm ml-2" onclick="checkLocationSettings()">
+                    <i class="fas fa-cog"></i> Check Settings
+                </button>
+            </div>
+        `;
+    }
+}
+
+function showLocationStatus(message, type = 'info') {
+    const statusDiv = document.getElementById('locationStatus');
+    const iconClass = type === 'success' ? 'fa-check-circle' : 
+                     type === 'danger' ? 'fa-exclamation-triangle' : 
+                     type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+    
+    statusDiv.innerHTML = `<i class="fas ${iconClass}"></i> ${message}`;
+    statusDiv.className = `alert alert-${type}`;
+    statusDiv.style.display = 'block';
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+function getDeviceInfo() {
+    return {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        timestamp: new Date().toISOString()
+    };
+}
+
+// Additional helper functions for location access
+function showLocationPermissionGuide() {
+    const modal = new bootstrap.Modal(document.getElementById('locationPermissionModal'));
+    modal.show();
+}
+
+function retryLocationAccess() {
+    // Close any open modals
+    const modals = document.querySelectorAll('.modal.show');
+    modals.forEach(modal => {
+        const modalInstance = bootstrap.Modal.getInstance(modal);
+        if (modalInstance) modalInstance.hide();
+    });
+    
+    // Reset UI and try again
+    document.getElementById('locationStatus').style.display = 'none';
+    setTimeout(() => {
+        startLocationVerification();
+    }, 500);
+}
+
+function checkLocationSettings() {
+    let settingsUrl = '';
+    const userAgent = navigator.userAgent.toLowerCase();
+    
+    if (userAgent.includes('chrome')) {
+        settingsUrl = 'chrome://settings/content/location';
+    } else if (userAgent.includes('firefox')) {
+        settingsUrl = 'about:preferences#privacy';
+    } else if (userAgent.includes('safari')) {
+        alert('On Safari: Go to Safari > Preferences > Websites > Location Services');
+        return;
+    } else {
+        alert('Please check your browser settings to enable location access for this website.');
+        return;
+    }
+    
+    // Try to open settings (may be blocked by browser security)
+    try {
+        window.open(settingsUrl, '_blank');
+    } catch (e) {
+        alert('Please manually navigate to your browser settings to enable location access.');
+    }
+}
+
+// Enhanced location detection with better user feedback
+function detectLocationCapabilities() {
+    const capabilities = {
+        geolocation: !!navigator.geolocation,
+        permissions: !!navigator.permissions,
+        https: location.protocol === 'https:',
+        userAgent: navigator.userAgent
+    };
+    
+    console.log('Location capabilities:', capabilities);
+    
+    if (!capabilities.geolocation) {
+        showLocationStatus('Your browser does not support location services. Please use a modern browser.', 'danger');
+        return false;
+    }
+    
+    if (!capabilities.https && location.hostname !== 'localhost') {
+        showLocationStatus('Location services require a secure connection (HTTPS). Please contact your administrator.', 'danger');
+        return false;
+    }
+    
+    return true;
+}
+
+// Check location capabilities on page load
+document.addEventListener('DOMContentLoaded', function() {
+    detectLocationCapabilities();
+});
+</script>
+
+<style>
+.step-container {
+    border-left: 4px solid #28a745;
+    padding-left: 20px;
+    margin-bottom: 30px;
+}
+
+.verification-progress {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.card {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.alert ul {
+    margin-bottom: 0;
+    padding-left: 20px;
+}
+</style>
+
+<!-- Location Permission Guide Modal -->
+<div class="modal fade" id="locationPermissionModal" tabindex="-1" aria-labelledby="locationPermissionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="locationPermissionModalLabel">
+                    <i class="fas fa-map-marker-alt"></i> Enable Location Access
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Location Access Required</h6>
+                    <p>This application needs access to your device's location to verify your attendance. Your location data is only used for attendance verification and is not shared with third parties.</p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fab fa-chrome"></i> Chrome / Edge</h6>
+                        <ol class="small">
+                            <li>Click the <i class="fas fa-lock"></i> lock icon in the address bar</li>
+                            <li>Set "Location" to "Allow"</li>
+                            <li>Refresh the page</li>
+                            <li>Click "Allow" when prompted</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fab fa-firefox"></i> Firefox</h6>
+                        <ol class="small">
+                            <li>Click the <i class="fas fa-shield-alt"></i> shield icon in the address bar</li>
+                            <li>Click "Allow Location Access"</li>
+                            <li>Or go to Settings > Privacy & Security > Permissions</li>
+                            <li>Add this site to location exceptions</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6><i class="fab fa-safari"></i> Safari (Mobile)</h6>
+                        <ol class="small">
+                            <li>Go to Settings > Privacy & Security</li>
+                            <li>Tap "Location Services"</li>
+                            <li>Find Safari and enable location</li>
+                            <li>Return to the app and try again</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fab fa-android"></i> Android Chrome</h6>
+                        <ol class="small">
+                            <li>Tap the <i class="fas fa-lock"></i> lock icon in address bar</li>
+                            <li>Tap "Permissions"</li>
+                            <li>Enable "Location"</li>
+                            <li>Refresh the page</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3">
+                    <h6><i class="fas fa-lightbulb"></i> Troubleshooting Tips</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>Still not working?</strong> Try refreshing the page after enabling location</li>
+                        <li><strong>Using incognito/private mode?</strong> Location may be blocked by default</li>
+                        <li><strong>On a computer?</strong> Make sure WiFi is enabled for better location accuracy</li>
+                        <li><strong>GPS issues?</strong> Try moving to an area with better signal (near windows, outdoors)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="retryLocationAccess()">
+                    <i class="fas fa-redo"></i> Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

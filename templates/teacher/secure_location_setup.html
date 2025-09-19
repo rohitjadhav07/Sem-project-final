@@ -1,0 +1,525 @@
+{% extends "base.html" %}
+
+{% block title %}Secure Location Setup - {{ lecture.title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4><i class="fas fa-shield-alt"></i> Secure Location Setup</h4>
+                    <p class="mb-0">Setting precise location for: <strong>{{ lecture.title }}</strong></p>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Security Notice -->
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle"></i> Important Security Notice</h6>
+                        <ul class="mb-0">
+                            <li>Once location is set and locked, it cannot be changed without admin approval</li>
+                            <li>Students must be within the exact geofence area to mark attendance</li>
+                            <li>High GPS accuracy is required for security</li>
+                            <li>Location will be verified multiple times before locking</li>
+                        </ul>
+                    </div>
+
+                    <!-- Step 1: Initial Location Capture -->
+                    <div class="step-container" id="step1">
+                        <h5><i class="fas fa-map-marker-alt"></i> Step 1: Capture Current Location</h5>
+                        <p>Please ensure you are at the exact location where the lecture will be conducted.</p>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <button class="btn btn-primary btn-lg btn-block" onclick="captureHighAccuracyLocation()">
+                                    <i class="fas fa-crosshairs"></i> Capture High-Precision Location
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <button class="btn btn-outline-secondary btn-lg btn-block" onclick="captureStandardLocation()">
+                                    <i class="fas fa-map-pin"></i> Capture Standard Location
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Location Status -->
+                        <div id="locationStatus" class="mt-3" style="display: none;"></div>
+                        <div id="locationAccuracy" class="mt-3" style="display: none;">
+                            <span id="accuracyText"></span>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Location Verification -->
+                    <div class="step-container" id="step2" style="display: none;">
+                        <h5><i class="fas fa-check-circle"></i> Step 2: Verify Location Data</h5>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6>Captured Coordinates</h6>
+                                        <p><strong>Latitude:</strong> <span id="capturedLat">-</span></p>
+                                        <p><strong>Longitude:</strong> <span id="capturedLng">-</span></p>
+                                        <p><strong>Accuracy:</strong> <span id="capturedAccuracy">-</span></p>
+                                        <p><strong>Timestamp:</strong> <span id="capturedTime">-</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6>Security Information</h6>
+                                        <p><strong>Device:</strong> <span id="deviceInfo">-</span></p>
+                                        <p><strong>GPS Status:</strong> <span id="gpsStatus">-</span></p>
+                                        <p><strong>Signal Strength:</strong> <span id="signalStrength">-</span></p>
+                                        <p><strong>Security Score:</strong> <span id="securityScore">-</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button class="btn btn-success" onclick="proceedToConfirmation()" id="proceedBtn" disabled>
+                                <i class="fas fa-arrow-right"></i> Proceed to Confirmation
+                            </button>
+                            <button class="btn btn-outline-warning ml-2" onclick="recaptureLocation()">
+                                <i class="fas fa-redo"></i> Recapture Location
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Multiple Confirmations -->
+                    <div class="step-container" id="step3" style="display: none;">
+                        <h5><i class="fas fa-lock"></i> Step 3: Confirm Location (Security Verification)</h5>
+                        <p>For security, please confirm your location <strong>3 times</strong> by capturing it again.</p>
+                        
+                        <div class="confirmation-progress mb-3">
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: 0%" id="confirmationProgress">
+                                    0/3 Confirmations
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="confirmationResults">
+                            <!-- Confirmation results will be displayed here -->
+                        </div>
+                        
+                        <button class="btn btn-warning btn-lg" onclick="confirmLocation()" id="confirmBtn">
+                            <i class="fas fa-crosshairs"></i> Confirm Location (<span id="confirmCount">1</span>/3)
+                        </button>
+                    </div>
+
+                    <!-- Step 4: Final Setup -->
+                    <div class="step-container" id="step4" style="display: none;">
+                        <h5><i class="fas fa-cog"></i> Step 4: Final Configuration</h5>
+                        
+                        <form id="locationForm" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                            <input type="hidden" name="latitude" id="finalLatitude">
+                            <input type="hidden" name="longitude" id="finalLongitude">
+                            <input type="hidden" name="location_metadata" id="finalMetadata">
+                            <input type="hidden" name="security_data" id="securityData">
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="locationName">Location Name (Optional)</label>
+                                        <input type="text" class="form-control" name="location_name" id="locationName" 
+                                               placeholder="e.g., Room 101, Main Building">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="geofenceRadius">Geofence Radius (meters)</label>
+                                        <select class="form-control" name="geofence_radius" id="geofenceRadius">
+                                            <option value="10">10m - Very Strict (Small room)</option>
+                                            <option value="25" selected>25m - Strict (Medium room/area)</option>
+                                            <option value="50">50m - Standard (Large room/building)</option>
+                                            <option value="100">100m - Flexible (Campus area)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="confirmUnderstanding" required>
+                                    <label class="form-check-label" for="confirmUnderstanding">
+                                        <strong>I understand that:</strong>
+                                        <ul class="mt-2">
+                                            <li>This location will be permanently locked for this lecture</li>
+                                            <li>Students must be physically present at this exact location</li>
+                                            <li>Location cannot be changed without administrative approval</li>
+                                            <li>All attendance will be verified against this precise location</li>
+                                        </ul>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-success btn-lg" id="finalSubmitBtn" disabled>
+                                    <i class="fas fa-lock"></i> Lock Location & Complete Setup
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let locationData = {
+    captures: [],
+    confirmations: [],
+    finalLocation: null,
+    securityInfo: {}
+};
+
+let confirmationCount = 0;
+const requiredConfirmations = 3;
+const maxAccuracyAllowed = 15; // meters
+
+function captureHighAccuracyLocation() {
+    captureLocation(true);
+}
+
+function captureStandardLocation() {
+    captureLocation(false);
+}
+
+function captureLocation(highAccuracy = true) {
+    if (!navigator.geolocation) {
+        alert('Geolocation is not supported by this browser.');
+        return;
+    }
+    
+    showLocationStatus('Capturing location with high precision...', 'info');
+    
+    const options = {
+        enableHighAccuracy: highAccuracy,
+        timeout: highAccuracy ? 45000 : 15000,
+        maximumAge: 0
+    };
+    
+    navigator.geolocation.getCurrentPosition(
+        function(position) {
+            processLocationCapture(position);
+        },
+        function(error) {
+            handleLocationError(error);
+        },
+        options
+    );
+}
+
+function processLocationCapture(position) {
+    const capture = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        altitude: position.coords.altitude,
+        altitudeAccuracy: position.coords.altitudeAccuracy,
+        heading: position.coords.heading,
+        speed: position.coords.speed,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent
+    };
+    
+    locationData.captures.push(capture);
+    
+    // Validate accuracy
+    if (capture.accuracy > maxAccuracyAllowed) {
+        showLocationStatus(
+            `Location accuracy is ${Math.round(capture.accuracy)}m. This exceeds the maximum allowed accuracy of ${maxAccuracyAllowed}m. Please move to an area with better GPS signal and try again.`,
+            'danger'
+        );
+        return;
+    }
+    
+    // Update UI
+    updateLocationDisplay(capture);
+    calculateSecurityScore(capture);
+    
+    // Show step 2
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+    
+    showLocationStatus(`Location captured successfully! Accuracy: ±${Math.round(capture.accuracy)}m`, 'success');
+}
+
+function updateLocationDisplay(capture) {
+    document.getElementById('capturedLat').textContent = capture.latitude.toFixed(8);
+    document.getElementById('capturedLng').textContent = capture.longitude.toFixed(8);
+    document.getElementById('capturedAccuracy').textContent = `±${Math.round(capture.accuracy)}m`;
+    document.getElementById('capturedTime').textContent = new Date(capture.timestamp).toLocaleString();
+    
+    // Device info
+    const deviceInfo = getDeviceInfo();
+    document.getElementById('deviceInfo').textContent = deviceInfo.type;
+    document.getElementById('gpsStatus').textContent = capture.accuracy <= 5 ? 'Excellent' : 
+                                                     capture.accuracy <= 10 ? 'Good' : 'Fair';
+    
+    // Enable proceed button if accuracy is acceptable
+    if (capture.accuracy <= maxAccuracyAllowed) {
+        document.getElementById('proceedBtn').disabled = false;
+    }
+}
+
+function calculateSecurityScore(capture) {
+    let score = 100;
+    
+    // Accuracy penalty
+    if (capture.accuracy > 10) score -= 20;
+    if (capture.accuracy > 5) score -= 10;
+    
+    // Device capabilities
+    if (!capture.altitude) score -= 5;
+    if (!capture.heading) score -= 5;
+    
+    // Speed check (should be stationary)
+    if (capture.speed && capture.speed > 1) score -= 15;
+    
+    locationData.securityInfo.score = Math.max(0, score);
+    document.getElementById('securityScore').textContent = `${score}%`;
+    
+    // Update signal strength display
+    const signalStrength = capture.accuracy <= 5 ? 'Strong' : 
+                          capture.accuracy <= 10 ? 'Good' : 'Weak';
+    document.getElementById('signalStrength').textContent = signalStrength;
+}
+
+function proceedToConfirmation() {
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'block';
+}
+
+function confirmLocation() {
+    captureLocationForConfirmation();
+}
+
+function captureLocationForConfirmation() {
+    showLocationStatus(`Capturing confirmation ${confirmationCount + 1}/${requiredConfirmations}...`, 'info');
+    
+    const options = {
+        enableHighAccuracy: true,
+        timeout: 30000,
+        maximumAge: 0
+    };
+    
+    navigator.geolocation.getCurrentPosition(
+        function(position) {
+            processConfirmationCapture(position);
+        },
+        function(error) {
+            handleLocationError(error);
+        },
+        options
+    );
+}
+
+function processConfirmationCapture(position) {
+    const originalCapture = locationData.captures[0];
+    const distance = calculateDistance(
+        originalCapture.latitude, originalCapture.longitude,
+        position.coords.latitude, position.coords.longitude
+    );
+    
+    const confirmation = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+        timestamp: new Date().toISOString(),
+        distanceFromOriginal: distance
+    };
+    
+    locationData.confirmations.push(confirmation);
+    confirmationCount++;
+    
+    // Check if confirmation is within acceptable range (5 meters)
+    const isValid = distance <= 5 && position.coords.accuracy <= maxAccuracyAllowed;
+    
+    // Update confirmation results
+    const resultDiv = document.createElement('div');
+    resultDiv.className = `alert ${isValid ? 'alert-success' : 'alert-warning'} mb-2`;
+    resultDiv.innerHTML = `
+        <strong>Confirmation ${confirmationCount}:</strong> 
+        Distance from original: ${distance.toFixed(1)}m, 
+        Accuracy: ±${Math.round(position.coords.accuracy)}m
+        ${isValid ? '<i class="fas fa-check text-success ml-2"></i>' : '<i class="fas fa-exclamation-triangle text-warning ml-2"></i>'}
+    `;
+    document.getElementById('confirmationResults').appendChild(resultDiv);
+    
+    // Update progress
+    const progress = (confirmationCount / requiredConfirmations) * 100;
+    document.getElementById('confirmationProgress').style.width = `${progress}%`;
+    document.getElementById('confirmationProgress').textContent = `${confirmationCount}/${requiredConfirmations} Confirmations`;
+    
+    if (confirmationCount < requiredConfirmations) {
+        document.getElementById('confirmCount').textContent = confirmationCount + 1;
+        showLocationStatus(`Confirmation ${confirmationCount} completed. Please capture ${requiredConfirmations - confirmationCount} more.`, 'info');
+    } else {
+        // All confirmations done
+        document.getElementById('confirmBtn').style.display = 'none';
+        
+        // Calculate final location (average of all valid captures)
+        calculateFinalLocation();
+        
+        // Show step 4
+        setTimeout(() => {
+            document.getElementById('step3').style.display = 'none';
+            document.getElementById('step4').style.display = 'block';
+        }, 2000);
+        
+        showLocationStatus('All confirmations completed! Proceeding to final setup...', 'success');
+    }
+}
+
+function calculateFinalLocation() {
+    // Use the most accurate capture as the final location
+    const allCaptures = [...locationData.captures, ...locationData.confirmations];
+    const bestCapture = allCaptures.reduce((best, current) => 
+        current.accuracy < best.accuracy ? current : best
+    );
+    
+    locationData.finalLocation = bestCapture;
+    
+    // Prepare form data
+    document.getElementById('finalLatitude').value = bestCapture.latitude;
+    document.getElementById('finalLongitude').value = bestCapture.longitude;
+    document.getElementById('finalMetadata').value = JSON.stringify({
+        captures: locationData.captures.length,
+        confirmations: locationData.confirmations.length,
+        finalAccuracy: bestCapture.accuracy,
+        securityScore: locationData.securityInfo.score,
+        deviceInfo: getDeviceInfo(),
+        timestamp: new Date().toISOString()
+    });
+    document.getElementById('securityData').value = JSON.stringify(locationData);
+}
+
+function recaptureLocation() {
+    // Reset and start over
+    locationData = { captures: [], confirmations: [], finalLocation: null, securityInfo: {} };
+    confirmationCount = 0;
+    
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step1').style.display = 'block';
+    
+    // Clear displays
+    document.getElementById('confirmationResults').innerHTML = '';
+    document.getElementById('confirmationProgress').style.width = '0%';
+    document.getElementById('confirmationProgress').textContent = '0/3 Confirmations';
+    document.getElementById('confirmCount').textContent = '1';
+}
+
+function handleLocationError(error) {
+    let errorMessage = 'Error getting location: ';
+    switch(error.code) {
+        case error.PERMISSION_DENIED:
+            errorMessage += 'Location access denied. Please enable location services.';
+            break;
+        case error.POSITION_UNAVAILABLE:
+            errorMessage += 'Location information unavailable. Please ensure GPS is enabled.';
+            break;
+        case error.TIMEOUT:
+            errorMessage += 'Location request timed out. Please try again.';
+            break;
+        default:
+            errorMessage += error.message;
+            break;
+    }
+    showLocationStatus(errorMessage, 'danger');
+}
+
+function showLocationStatus(message, type = 'info') {
+    const statusDiv = document.getElementById('locationStatus');
+    const iconClass = type === 'success' ? 'fa-check-circle' : 
+                     type === 'danger' ? 'fa-exclamation-triangle' : 
+                     type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+    
+    statusDiv.innerHTML = `<i class="fas ${iconClass}"></i> ${message}`;
+    statusDiv.className = `alert alert-${type}`;
+    statusDiv.style.display = 'block';
+}
+
+function getDeviceInfo() {
+    const ua = navigator.userAgent;
+    let deviceType = 'Unknown';
+    
+    if (/Mobile|Android|iPhone|iPad/.test(ua)) {
+        deviceType = 'Mobile Device';
+    } else if (/Windows|Mac|Linux/.test(ua)) {
+        deviceType = 'Desktop/Laptop';
+    }
+    
+    return {
+        type: deviceType,
+        userAgent: ua,
+        platform: navigator.platform,
+        language: navigator.language
+    };
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// Enable final submit when checkbox is checked
+document.getElementById('confirmUnderstanding').addEventListener('change', function() {
+    document.getElementById('finalSubmitBtn').disabled = !this.checked;
+});
+
+// Form submission
+document.getElementById('locationForm').addEventListener('submit', function(e) {
+    if (!locationData.finalLocation) {
+        e.preventDefault();
+        alert('Location data is not ready. Please complete all steps.');
+        return;
+    }
+    
+    if (!confirm('Are you absolutely sure you want to lock this location? This action cannot be undone without administrative approval.')) {
+        e.preventDefault();
+        return;
+    }
+    
+    // Show loading state
+    document.getElementById('finalSubmitBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Locking Location...';
+    document.getElementById('finalSubmitBtn').disabled = true;
+});
+</script>
+
+<style>
+.step-container {
+    border-left: 4px solid #007bff;
+    padding-left: 20px;
+    margin-bottom: 30px;
+}
+
+.confirmation-progress {
+    max-width: 400px;
+}
+
+.alert ul {
+    margin-bottom: 0;
+    padding-left: 20px;
+}
+
+.card {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-block {
+    width: 100%;
+}
+</style>
+{% endblock %}

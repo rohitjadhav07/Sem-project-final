@@ -1,0 +1,612 @@
+{% extends "base.html" %}
+
+{% block title %}Create Lecture - Enhanced Location{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('teacher.lectures') }}">Lectures</a></li>
+                <li class="breadcrumb-item active">Create Lecture</li>
+            </ol>
+        </nav>
+        
+        <h2><i class="fas fa-plus"></i> Create New Lecture</h2>
+        <p class="text-muted">Set up a new lecture with precise location-based attendance</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-edit"></i> Lecture Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="lectureForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="course_id" class="form-label">Course *</label>
+                                <select class="form-select" id="course_id" name="course_id" required>
+                                    <option value="">Select a course</option>
+                                    {% for course in courses %}
+                                        <option value="{{ course.id }}">{{ course.code }} - {{ course.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Lecture Title *</label>
+                                <input type="text" class="form-control" id="title" name="title" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="scheduled_start" class="form-label">Start Date & Time *</label>
+                                <input type="datetime-local" class="form-control" id="scheduled_start" name="scheduled_start" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="duration" class="form-label">Duration (minutes) *</label>
+                                <input type="number" class="form-control" id="duration" name="duration" min="15" max="300" value="60" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Enhanced Location Section -->
+                    <div class="card border-primary mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0"><i class="fas fa-map-marker-alt"></i> Secure Location Setup</h6>
+                        </div>
+                        <div class="card-body">
+                            <!-- Location Status Display -->
+                            <div id="locationStatus" class="alert" style="display: none;"></div>
+                            
+                            <!-- Location Accuracy Display -->
+                            <div id="locationAccuracy" class="alert" style="display: none;">
+                                <strong>GPS Accuracy:</strong> <span id="accuracyText"></span>
+                            </div>
+
+                            <!-- Location Capture Buttons -->
+                            <div class="mb-3">
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-outline-primary" onclick="getCurrentLocation()">
+                                        <i class="fas fa-crosshairs"></i> Get Current Location
+                                    </button>
+                                    <button type="button" class="btn btn-primary" onclick="getHighAccuracyLocation()">
+                                        <i class="fas fa-bullseye"></i> High Accuracy Mode
+                                    </button>
+                                    <button type="button" class="btn btn-outline-success" onclick="validateLocation()">
+                                        <i class="fas fa-check-circle"></i> Validate Location
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Location Coordinates -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="latitude" class="form-label">Latitude *</label>
+                                        <input type="number" class="form-control" id="latitude" name="latitude" 
+                                               step="0.00000001" min="-90" max="90" required readonly>
+                                        <div class="form-text">Precise to 8 decimal places (~1mm accuracy)</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="longitude" class="form-label">Longitude *</label>
+                                        <input type="number" class="form-control" id="longitude" name="longitude" 
+                                               step="0.00000001" min="-180" max="180" required readonly>
+                                        <div class="form-text">Precise to 8 decimal places (~1mm accuracy)</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Location Name -->
+                            <div class="mb-3">
+                                <label for="location_name" class="form-label">Location Name</label>
+                                <input type="text" class="form-control" id="location_name" name="location_name" 
+                                       placeholder="e.g., Room 101, Main Building">
+                                <div class="form-text">Optional: Give this location a memorable name</div>
+                            </div>
+
+                            <!-- Geofence Settings -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="geofence_radius" class="form-label">Geofence Radius (meters)</label>
+                                        <input type="range" class="form-range" id="geofence_radius" name="geofence_radius" 
+                                               min="5" max="100" value="20" oninput="updateRadiusDisplay(this.value)">
+                                        <div class="d-flex justify-content-between">
+                                            <small>5m</small>
+                                            <strong id="radiusDisplay">20m</strong>
+                                            <small>100m</small>
+                                        </div>
+                                        <div class="form-text">Students must be within this radius to mark attendance</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="min_accuracy_required" class="form-label">Required GPS Accuracy (meters)</label>
+                                        <select class="form-select" id="min_accuracy_required" name="min_accuracy_required">
+                                            <option value="5">High Precision (≤5m)</option>
+                                            <option value="10">Good Precision (≤10m)</option>
+                                            <option value="20" selected>Standard Precision (≤20m)</option>
+                                            <option value="50">Low Precision (≤50m)</option>
+                                        </select>
+                                        <div class="form-text">Minimum GPS accuracy required for attendance</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Location Security Options -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="location_verification_required" 
+                                               name="location_verification_required" checked>
+                                        <label class="form-check-label" for="location_verification_required">
+                                            Require Location Verification
+                                        </label>
+                                        <div class="form-text">Students must verify their location before marking attendance</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="allow_location_updates" 
+                                               name="allow_location_updates">
+                                        <label class="form-check-label" for="allow_location_updates">
+                                            Allow Location Updates
+                                        </label>
+                                        <div class="form-text">Allow updating location after initial setup</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Location Preview -->
+                            <div id="locationPreview" class="mt-3" style="display: none;">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h6><i class="fas fa-eye"></i> Location Preview</h6>
+                                        <div id="locationDetails"></div>
+                                        <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="showLocationOnMap()">
+                                            <i class="fas fa-map"></i> View on Map
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Attendance Window Settings -->
+                    <div class="card border-info mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0"><i class="fas fa-clock"></i> Attendance Window</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="attendance_window_start" class="form-label">Window Start (minutes before)</label>
+                                        <input type="number" class="form-control" id="attendance_window_start" 
+                                               name="attendance_window_start" value="15" min="0" max="60">
+                                        <div class="form-text">How early can students mark attendance</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="attendance_window_end" class="form-label">Window End (minutes after)</label>
+                                        <input type="number" class="form-control" id="attendance_window_end" 
+                                               name="attendance_window_end" value="15" min="0" max="120">
+                                        <div class="form-text">How late can students mark attendance</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden fields for location metadata -->
+                    <input type="hidden" id="location_metadata" name="location_metadata">
+                    <input type="hidden" id="device_info" name="device_info">
+
+                    <!-- Form Actions -->
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('teacher.lectures') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-success" id="submitBtn">
+                            <i class="fas fa-save"></i> Create Lecture
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Help Sidebar -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-info-circle"></i> Location Setup Guide</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6><i class="fas fa-bullseye text-success"></i> High Accuracy Mode</h6>
+                    <p class="small">Use this for the most precise location capture. Requires clear sky view and may take longer.</p>
+                </div>
+                
+                <div class="mb-3">
+                    <h6><i class="fas fa-shield-alt text-primary"></i> Security Features</h6>
+                    <ul class="small">
+                        <li>Location is locked after setting</li>
+                        <li>Integrity verification prevents tampering</li>
+                        <li>Device fingerprinting for security</li>
+                        <li>Precision validation ensures accuracy</li>
+                    </ul>
+                </div>
+
+                <div class="mb-3">
+                    <h6><i class="fas fa-crosshairs text-warning"></i> Accuracy Levels</h6>
+                    <div class="small">
+                        <div class="d-flex justify-content-between">
+                            <span>Excellent:</span> <span class="text-success">≤5m</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Good:</span> <span class="text-info">≤10m</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Fair:</span> <span class="text-warning">≤20m</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Poor:</span> <span class="text-danger">>20m</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <small><i class="fas fa-lightbulb"></i> <strong>Tip:</strong> For best results, capture location from the exact spot where you want students to mark attendance.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Enhanced location capture with security features
+let locationCaptureAttempts = 0;
+let bestAccuracy = null;
+let locationHistory = [];
+
+function getCurrentLocation() {
+    if (navigator.geolocation) {
+        showLocationStatus('Getting current location...');
+        
+        const options = {
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 300000  // 5 minutes
+        };
+        
+        navigator.geolocation.getCurrentPosition(function(position) {
+            setLocationData(position, 'standard');
+            showLocationAccuracy(position.coords.accuracy);
+            hideLocationStatus();
+        }, function(error) {
+            hideLocationStatus();
+            handleLocationError(error);
+        }, options);
+    } else {
+        alert('Geolocation is not supported by this browser.');
+    }
+}
+
+function getHighAccuracyLocation() {
+    if (navigator.geolocation) {
+        showLocationStatus('Getting high accuracy location... Please wait and stay still.');
+        locationCaptureAttempts = 0;
+        bestAccuracy = null;
+        
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 45000,
+            maximumAge: 0
+        };
+        
+        // Try multiple times to get the best accuracy
+        attemptHighAccuracyCapture(options, 3);
+    } else {
+        alert('Geolocation is not supported by this browser.');
+    }
+}
+
+function attemptHighAccuracyCapture(options, maxAttempts) {
+    locationCaptureAttempts++;
+    
+    navigator.geolocation.getCurrentPosition(function(position) {
+        const accuracy = position.coords.accuracy;
+        
+        // Store this attempt
+        locationHistory.push({
+            position: position,
+            accuracy: accuracy,
+            timestamp: new Date()
+        });
+        
+        // Check if this is the best accuracy so far
+        if (!bestAccuracy || accuracy < bestAccuracy.coords.accuracy) {
+            bestAccuracy = position;
+            setLocationData(position, 'high_accuracy');
+            showLocationAccuracy(accuracy);
+        }
+        
+        // Continue trying if we haven't reached max attempts and accuracy isn't good enough
+        if (locationCaptureAttempts < maxAttempts && accuracy > 10) {
+            showLocationStatus(`Attempt ${locationCaptureAttempts}/${maxAttempts} - Current best: ±${Math.round(bestAccuracy.coords.accuracy)}m`);
+            setTimeout(() => attemptHighAccuracyCapture(options, maxAttempts), 2000);
+        } else {
+            hideLocationStatus();
+            if (bestAccuracy.coords.accuracy <= 5) {
+                showLocationSuccess(`Excellent accuracy achieved! ±${Math.round(bestAccuracy.coords.accuracy)}m`);
+            } else if (bestAccuracy.coords.accuracy <= 10) {
+                showLocationSuccess(`Good accuracy achieved! ±${Math.round(bestAccuracy.coords.accuracy)}m`);
+            } else {
+                showLocationWarning(`Best accuracy: ±${Math.round(bestAccuracy.coords.accuracy)}m. Consider trying again in an open area.`);
+            }
+        }
+    }, function(error) {
+        if (locationCaptureAttempts < maxAttempts) {
+            setTimeout(() => attemptHighAccuracyCapture(options, maxAttempts), 2000);
+        } else {
+            hideLocationStatus();
+            handleLocationError(error);
+        }
+    }, options);
+}
+
+function setLocationData(position, captureMode) {
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+    
+    document.getElementById('latitude').value = lat.toFixed(8);
+    document.getElementById('longitude').value = lng.toFixed(8);
+    
+    // Prepare enhanced metadata
+    const locationMetadata = {
+        latitude: lat,
+        longitude: lng,
+        accuracy: position.coords.accuracy,
+        altitude: position.coords.altitude,
+        altitudeAccuracy: position.coords.altitudeAccuracy,
+        heading: position.coords.heading,
+        speed: position.coords.speed,
+        timestamp: new Date().toISOString(),
+        captureMode: captureMode,
+        attempts: locationCaptureAttempts,
+        locationHistory: locationHistory.length > 0 ? locationHistory : undefined
+    };
+    
+    // Device information for security
+    const deviceInfo = {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        cookieEnabled: navigator.cookieEnabled,
+        onLine: navigator.onLine,
+        screenResolution: `${screen.width}x${screen.height}`,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timestamp: new Date().toISOString()
+    };
+    
+    // Store in hidden fields
+    document.getElementById('location_metadata').value = JSON.stringify(locationMetadata);
+    document.getElementById('device_info').value = JSON.stringify(deviceInfo);
+    
+    // Show location preview
+    showLocationPreview(lat, lng, position.coords.accuracy);
+    
+    // Enable form submission
+    document.getElementById('submitBtn').disabled = false;
+}
+
+function showLocationPreview(lat, lng, accuracy) {
+    const preview = document.getElementById('locationPreview');
+    const details = document.getElementById('locationDetails');
+    
+    details.innerHTML = `
+        <div class="row">
+            <div class="col-6"><strong>Latitude:</strong></div>
+            <div class="col-6">${lat.toFixed(8)}</div>
+        </div>
+        <div class="row">
+            <div class="col-6"><strong>Longitude:</strong></div>
+            <div class="col-6">${lng.toFixed(8)}</div>
+        </div>
+        <div class="row">
+            <div class="col-6"><strong>Accuracy:</strong></div>
+            <div class="col-6">±${Math.round(accuracy)}m</div>
+        </div>
+        <div class="row">
+            <div class="col-6"><strong>Captured:</strong></div>
+            <div class="col-6">${new Date().toLocaleTimeString()}</div>
+        </div>
+    `;
+    
+    preview.style.display = 'block';
+}
+
+function validateLocation() {
+    const lat = document.getElementById('latitude').value;
+    const lng = document.getElementById('longitude').value;
+    
+    if (!lat || !lng) {
+        alert('Please capture location first!');
+        return;
+    }
+    
+    showLocationStatus('Validating location coordinates...');
+    
+    // Validate coordinates
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+    
+    if (latitude < -90 || latitude > 90) {
+        alert('Invalid latitude. Must be between -90 and 90.');
+        hideLocationStatus();
+        return;
+    }
+    
+    if (longitude < -180 || longitude > 180) {
+        alert('Invalid longitude. Must be between -180 and 180.');
+        hideLocationStatus();
+        return;
+    }
+    
+    // Check for suspicious coordinates
+    if (latitude === 0 && longitude === 0) {
+        alert('Invalid coordinates detected. Please capture location again.');
+        hideLocationStatus();
+        return;
+    }
+    
+    // Check precision (potential spoofing detection)
+    const latStr = lat.toString();
+    const lngStr = lng.toString();
+    
+    if (latStr.includes('.') && latStr.split('.')[1].length > 8) {
+        alert('Suspicious precision detected. Please recapture location.');
+        hideLocationStatus();
+        return;
+    }
+    
+    hideLocationStatus();
+    showLocationSuccess(`Location validated successfully! Coordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+}
+
+function showLocationStatus(message) {
+    const statusDiv = document.getElementById('locationStatus');
+    statusDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
+    statusDiv.style.display = 'block';
+    statusDiv.className = 'alert alert-info';
+}
+
+function hideLocationStatus() {
+    document.getElementById('locationStatus').style.display = 'none';
+}
+
+function showLocationAccuracy(accuracy) {
+    const accuracyDiv = document.getElementById('locationAccuracy');
+    const accuracyText = document.getElementById('accuracyText');
+    
+    if (accuracy <= 5) {
+        accuracyDiv.className = 'alert alert-success';
+        accuracyText.innerHTML = `<i class="fas fa-check-circle"></i> Excellent: ±${Math.round(accuracy)}m`;
+    } else if (accuracy <= 10) {
+        accuracyDiv.className = 'alert alert-info';
+        accuracyText.innerHTML = `<i class="fas fa-info-circle"></i> Good: ±${Math.round(accuracy)}m`;
+    } else if (accuracy <= 20) {
+        accuracyDiv.className = 'alert alert-warning';
+        accuracyText.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Fair: ±${Math.round(accuracy)}m`;
+    } else {
+        accuracyDiv.className = 'alert alert-danger';
+        accuracyText.innerHTML = `<i class="fas fa-times-circle"></i> Poor: ±${Math.round(accuracy)}m - Consider retrying`;
+    }
+    
+    accuracyDiv.style.display = 'block';
+}
+
+function showLocationWarning(message) {
+    const statusDiv = document.getElementById('locationStatus');
+    statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+    statusDiv.className = 'alert alert-warning';
+    statusDiv.style.display = 'block';
+}
+
+function showLocationSuccess(message) {
+    const statusDiv = document.getElementById('locationStatus');
+    statusDiv.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+    statusDiv.className = 'alert alert-success';
+    statusDiv.style.display = 'block';
+}
+
+function handleLocationError(error) {
+    let errorMessage = 'Error getting location: ';
+    switch(error.code) {
+        case error.PERMISSION_DENIED:
+            errorMessage += 'Location access denied. Please enable location services.';
+            break;
+        case error.POSITION_UNAVAILABLE:
+            errorMessage += 'Location information unavailable. Try moving to an open area.';
+            break;
+        case error.TIMEOUT:
+            errorMessage += 'Location request timed out. Please try again.';
+            break;
+        default:
+            errorMessage += error.message;
+            break;
+    }
+    alert(errorMessage);
+}
+
+function updateRadiusDisplay(value) {
+    document.getElementById('radiusDisplay').textContent = value + 'm';
+}
+
+function showLocationOnMap() {
+    const lat = parseFloat(document.getElementById('latitude').value);
+    const lng = parseFloat(document.getElementById('longitude').value);
+    
+    if (lat && lng) {
+        // Open in Google Maps
+        const url = `https://www.google.com/maps?q=${lat},${lng}&z=18`;
+        window.open(url, '_blank');
+    }
+}
+
+// Form validation
+document.getElementById('lectureForm').addEventListener('submit', function(e) {
+    const lat = document.getElementById('latitude').value;
+    const lng = document.getElementById('longitude').value;
+    
+    if (!lat || !lng) {
+        e.preventDefault();
+        alert('Please capture the lecture location before creating the lecture.');
+        return false;
+    }
+    
+    // Additional validation
+    const accuracy = bestAccuracy ? bestAccuracy.coords.accuracy : null;
+    const requiredAccuracy = parseInt(document.getElementById('min_accuracy_required').value);
+    
+    if (accuracy && accuracy > requiredAccuracy) {
+        if (!confirm(`GPS accuracy (±${Math.round(accuracy)}m) exceeds required accuracy (±${requiredAccuracy}m). Continue anyway?`)) {
+            e.preventDefault();
+            return false;
+        }
+    }
+});
+
+// Initialize form
+document.addEventListener('DOMContentLoaded', function() {
+    // Disable submit button until location is captured
+    document.getElementById('submitBtn').disabled = true;
+    
+    // Set minimum datetime to current time
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('scheduled_start').min = now.toISOString().slice(0, 16);
+});
+</script>
+{% endblock %}

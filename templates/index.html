@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto text-center">
+        <h1 class="display-4 mb-4">
+            <i class="fas fa-map-marker-alt text-primary"></i>
+            Geo Attendance Pro
+        </h1>
+        <p class="lead">Location-based attendance tracking system for educational institutions</p>
+        
+        {% if not current_user.is_authenticated %}
+            <div class="mt-4">
+                <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-lg me-3">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </a>
+                <a href="{{ url_for('auth.register') }}" class="btn btn-outline-primary btn-lg">
+                    <i class="fas fa-user-plus"></i> Register
+                </a>
+            </div>
+        {% else %}
+            <div class="mt-4">
+                {% if current_user.role == 'student' %}
+                    <a href="{{ url_for('student.dashboard') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+                    </a>
+                {% elif current_user.role == 'teacher' %}
+                    <a href="{{ url_for('teacher.dashboard') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-chalkboard-teacher"></i> Teacher Dashboard
+                    </a>
+                {% elif current_user.role == 'admin' %}
+                    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-cogs"></i> Admin Dashboard
+                    </a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-map-marked-alt fa-3x text-primary mb-3"></i>
+                <h5 class="card-title">Location-Based</h5>
+                <p class="card-text">Students can only mark attendance when physically present at the lecture location using GPS verification.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-mobile-alt fa-3x text-success mb-3"></i>
+                <h5 class="card-title">Mobile Friendly</h5>
+                <p class="card-text">Responsive design works perfectly on smartphones, tablets, and desktop computers.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-chart-bar fa-3x text-info mb-3"></i>
+                <h5 class="card-title">Real-time Reports</h5>
+                <p class="card-text">Teachers and administrators get instant attendance reports and analytics.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
