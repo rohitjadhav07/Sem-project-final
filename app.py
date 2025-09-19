@@ -1,17 +1,8 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from flask_jwt_extended import JWTManager
-from flask_migrate import Migrate
 from flask_cors import CORS
 import os
 from config import Config
-
-# Initialize extensions
-db = SQLAlchemy()
-login_manager = LoginManager()
-jwt = JWTManager()
-migrate = Migrate()
+from extensions import db, login_manager, jwt, migrate
 
 def create_app(config_name=None):
     app = Flask(__name__)
@@ -58,19 +49,20 @@ def create_app(config_name=None):
     # Add location test route
     @app.route('/test/location')
     def location_test():
+        from flask import render_template
         return render_template('test/location_test.html')
     
     # Main route
     from routes.main import main_bp
     app.register_blueprint(main_bp)
     
+    # Initialize database tables
+    with app.app_context():
+        db.create_all()
+    
     return app
 
 if __name__ == '__main__':
-    import os
     app = create_app()
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=port, debug=True)

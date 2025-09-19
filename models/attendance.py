@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from app import db
+from extensions import db
 
 # IST timezone (UTC+5:30)
 IST = timezone(timedelta(hours=5, minutes=30))

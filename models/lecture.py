@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from app import db
+from extensions import db
 from utils.geolocation import is_within_geofence
 
 # IST timezone (UTC+5:30)

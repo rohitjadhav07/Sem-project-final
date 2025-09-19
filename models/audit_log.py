@@ -1,5 +1,5 @@
 from datetime import datetime
-from app import db
+from extensions import db
 
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'

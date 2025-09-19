@@ -1,7 +1,11 @@
 """
 Vercel entry point for Geo Attendance Pro
 """
+import os
 from app import create_app
+
+# Set production environment
+os.environ.setdefault('FLASK_CONFIG', 'production')
 
 # Create the Flask app for Vercel
 app = create_app('production')
