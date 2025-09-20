@@ -60,10 +60,20 @@ class TestingConfig(Config):
 class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
-    # Use Supabase PostgreSQL database or fallback to SQLite
-    SQLALCHEMY_DATABASE_URI = os.environ.get('SUPABASE_DATABASE_URL') or \
-                              os.environ.get('DATABASE_URL') or \
-                              'sqlite:////tmp/geo_attendance.db'
+    # Use SQLite for production (works without additional dependencies)
+    # Supabase can be enabled by setting SUPABASE_DATABASE_URL environment variable
+    database_url = os.environ.get('SUPABASE_DATABASE_URL') or os.environ.get('DATABASE_URL')
+    
+    # Only use PostgreSQL if psycopg2 is available
+    if database_url and database_url.startswith('postgresql://'):
+        try:
+            import psycopg2
+            SQLALCHEMY_DATABASE_URI = database_url
+        except ImportError:
+            print("⚠️ PostgreSQL URL provided but psycopg2 not available, using SQLite")
+            SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/geo_attendance.db'
+    else:
+        SQLALCHEMY_DATABASE_URI = database_url or 'sqlite:////tmp/geo_attendance.db'
     
     # Enhanced security for production
     SESSION_COOKIE_SECURE = True

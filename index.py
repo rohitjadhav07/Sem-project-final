@@ -257,26 +257,26 @@ def test_supabase():
 
 @app.route('/full-app')
 def full_app():
-    try:
-        # Try to load the full application
-        from app import create_app
-        full_app_instance = create_app('production')
-        return '''
-        <div style="text-align: center; margin-top: 50px;">
-            <h2>✅ Full App Loaded Successfully!</h2>
-            <p>The complete Geo Attendance Pro application is working.</p>
-            <p><a href="/">Back to Home</a></p>
-        </div>
-        '''
-    except Exception as e:
-        return f'''
-        <div style="text-align: center; margin-top: 50px;">
-            <h2>⚠️ Full App Loading Issue</h2>
-            <p>Error: {str(e)}</p>
-            <p>The basic app is working, but there might be import issues with the full application.</p>
-            <p><a href="/">Back to Home</a></p>
-        </div>
-        '''
+    return '''
+    <div style="text-align: center; margin-top: 50px;">
+        <h2>🚀 Redirecting to Full App...</h2>
+        <p>Loading the complete Geo Attendance Pro application...</p>
+        <script>
+            setTimeout(function() {
+                window.location.href = '/app';
+            }, 2000);
+        </script>
+        <p><a href="/app">Click here if not redirected automatically</a></p>
+    </div>
+    '''
+
+# Register the simple routes blueprint
+try:
+    from simple_routes import simple_bp
+    app.register_blueprint(simple_bp)
+    print("✅ Simple routes registered successfully")
+except Exception as e:
+    print(f"⚠️ Could not register simple routes: {e}")
 
 @app.route('/health')
 def health():

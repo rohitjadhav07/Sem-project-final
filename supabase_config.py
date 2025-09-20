@@ -30,8 +30,16 @@ class SupabaseConfig:
                 print(f"⚠️ Could not initialize Supabase client: {e}")
     
     def get_database_url(self):
-        """Get the PostgreSQL database URL for SQLAlchemy"""
-        if self.database_url:
+        """Get the database URL for SQLAlchemy"""
+        if self.database_url and self.database_url.startswith('postgresql://'):
+            # Check if psycopg2 is available for PostgreSQL
+            try:
+                import psycopg2
+                return self.database_url
+            except ImportError:
+                print("⚠️ PostgreSQL URL provided but psycopg2 not available, using SQLite")
+                return 'sqlite:////tmp/geo_attendance.db'
+        elif self.database_url:
             return self.database_url
         
         # Fallback to SQLite if Supabase not configured
