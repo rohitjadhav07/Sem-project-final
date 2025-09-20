@@ -63,7 +63,7 @@ class Lecture(db.Model):
     
     def is_attendance_window_open(self):
         """Check if attendance window is currently open"""
-        now = datetime.utcnow()
+        now = datetime.now(IST)
         start_window = self.scheduled_start + timedelta(minutes=self.attendance_window_start)
         end_window = self.scheduled_start + timedelta(minutes=self.attendance_window_end)
         return start_window <= now <= end_window
@@ -86,13 +86,13 @@ class Lecture(db.Model):
     def start_lecture(self):
         """Start the lecture"""
         self.status = 'active'
-        self.actual_start = datetime.utcnow()
+        self.actual_start = datetime.now(IST)
         db.session.commit()
     
     def end_lecture(self):
         """End the lecture"""
         self.status = 'completed'
-        self.actual_end = datetime.utcnow()
+        self.actual_end = datetime.now(IST)
         db.session.commit()
     
     def is_within_geofence(self, student_lat, student_lon):

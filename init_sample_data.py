@@ -18,6 +18,12 @@ def init_sample_data():
         # Create tables
         db.create_all()
         
+        # Try to restore from backup first
+        from database_manager import db_manager
+        if db_manager.restore_database_from_json(db.session):
+            print("✅ Data restored from backup")
+            return
+        
         # Check if data already exists
         if User.query.first():
             return  # Data already exists
@@ -82,23 +88,77 @@ def init_sample_data():
         )
         db.session.add(enrollment)
         
-        # Create sample lecture
-        lecture_time = datetime.now(IST) + timedelta(hours=1)
-        lecture = Lecture(
+        # Create multiple sample lectures for testing
+        
+        # Lecture 1: Currently active (attendance window open)
+        current_time = datetime.now(IST)
+        lecture1 = Lecture(
             title='Introduction to Programming',
             course_id=course.id,
             teacher_id=teacher.id,
-            scheduled_start=lecture_time,
-            scheduled_end=lecture_time + timedelta(hours=2),
-            location_name='Room 101',
+            scheduled_start=current_time - timedelta(minutes=5),  # Started 5 minutes ago
+            scheduled_end=current_time + timedelta(hours=1, minutes=55),  # Ends in ~2 hours
+            location_name='Room 101, Computer Lab',
             latitude=19.0760,
             longitude=72.8777,
             geofence_radius=50,
-            is_active=True
+            is_active=True,
+            status='active',
+            attendance_window_start=-15,  # 15 minutes before start
+            attendance_window_end=30,     # 30 minutes after start
+            location_locked=True,
+            location_accuracy=5.0,
+            location_set_at=current_time - timedelta(hours=1)
         )
-        db.session.add(lecture)
+        db.session.add(lecture1)
+        
+        # Lecture 2: Upcoming lecture (window opens soon)
+        lecture2 = Lecture(
+            title='Data Structures and Algorithms',
+            course_id=course.id,
+            teacher_id=teacher.id,
+            scheduled_start=current_time + timedelta(hours=2),
+            scheduled_end=current_time + timedelta(hours=4),
+            location_name='Room 102, Theory Class',
+            latitude=19.0765,  # Slightly different location
+            longitude=72.8780,
+            geofence_radius=40,
+            is_active=True,
+            status='scheduled',
+            attendance_window_start=-10,
+            attendance_window_end=20,
+            location_locked=True,
+            location_accuracy=3.0,
+            location_set_at=current_time - timedelta(minutes=30)
+        )
+        db.session.add(lecture2)
+        
+        # Lecture 3: Another active lecture for testing
+        lecture3 = Lecture(
+            title='Web Development Basics',
+            course_id=course.id,
+            teacher_id=teacher.id,
+            scheduled_start=current_time - timedelta(minutes=10),
+            scheduled_end=current_time + timedelta(hours=1, minutes=50),
+            location_name='Room 103, Lab Session',
+            latitude=19.0755,
+            longitude=72.8785,
+            geofence_radius=60,
+            is_active=True,
+            status='active',
+            attendance_window_start=-20,
+            attendance_window_end=25,
+            location_locked=True,
+            location_accuracy=4.0,
+            location_set_at=current_time - timedelta(hours=2)
+        )
+        db.session.add(lecture3)
         
         db.session.commit()
+        
+        # Backup the data for persistence
+        db_manager.backup_database_to_json(db.session)
+        
         print("✅ Sample data initialized successfully!")
         
     except Exception as e:

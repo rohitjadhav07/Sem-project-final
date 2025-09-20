@@ -144,7 +144,7 @@ def active_lectures():
     from datetime import datetime, date
     
     # Get lectures for enrolled courses that are scheduled for today or currently active
-    today = date.today()
+    today = datetime.now(IST).date()
     lectures = Lecture.query.join(Course).join(Enrollment)\
         .filter(
             Enrollment.student_id == current_user.id,
@@ -183,7 +183,7 @@ def active_lectures():
             available_lectures.append(lecture)
         else:
             # Check if window has passed or not yet started
-            now = datetime.now()
+            now = datetime.now(IST)
             start_window = lecture.scheduled_start + timedelta(minutes=lecture.attendance_window_start)
             
             if now < start_window:
@@ -571,7 +571,7 @@ def api_active_lectures():
     from datetime import datetime, date
     
     # Get lectures for enrolled courses that are scheduled for today or currently active
-    today = date.today()
+    today = datetime.now(IST).date()
     lectures = Lecture.query.join(Course).join(Enrollment)\
         .filter(
             Enrollment.student_id == current_user.id,

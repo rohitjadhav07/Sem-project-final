@@ -60,8 +60,8 @@ class TestingConfig(Config):
 class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
-    # Use in-memory SQLite for serverless environments like Vercel
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///:memory:'
+    # Use persistent SQLite in /tmp for Vercel (survives longer than in-memory)
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:////tmp/geo_attendance.db'
     
     # Enhanced security for production
     SESSION_COOKIE_SECURE = True
