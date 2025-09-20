@@ -39,7 +39,6 @@ def create_app(config_name=None):
     from routes.api import api_bp
     from debug_routes import debug_bp
     from test_routes import test_bp
-    from simple_active_lectures import simple_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(admin_bp, url_prefix='/admin')
@@ -49,7 +48,14 @@ def create_app(config_name=None):
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(debug_bp)
     app.register_blueprint(test_bp)
-    app.register_blueprint(simple_bp)
+    
+    # Register simple active lectures blueprint
+    try:
+        from simple_active_lectures import simple_bp
+        app.register_blueprint(simple_bp)
+        print("✅ Simple active lectures registered")
+    except Exception as e:
+        print(f"⚠️ Could not register simple active lectures: {e}")
     
     # Add location test route
     @app.route('/test/location')
@@ -64,22 +70,18 @@ def create_app(config_name=None):
     # Initialize database tables and sample data
     with app.app_context():
         try:
-            from init_supabase import create_supabase_tables, init_supabase_data
-            create_supabase_tables()
-            init_supabase_data()
-        except ImportError:
-            # Fallback to SQLite initialization if Supabase not available
-            print("⚠️ Supabase not available, using SQLite fallback")
+            # Try to use the original sample data initialization
             from init_sample_data import init_sample_data
             init_sample_data()
+            print("✅ Database initialized with sample data")
         except Exception as e:
             print(f"⚠️ Database initialization error: {e}")
-            # Try fallback initialization
+            # Create basic tables at least
             try:
-                from init_sample_data import init_sample_data
-                init_sample_data()
-            except Exception as fallback_error:
-                print(f"❌ Fallback initialization also failed: {fallback_error}")
+                db.create_all()
+                print("✅ Basic database tables created")
+            except Exception as table_error:
+                print(f"❌ Could not create tables: {table_error}")
     
     return app
 
