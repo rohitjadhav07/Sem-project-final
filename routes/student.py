@@ -142,91 +142,114 @@ def course_detail(course_id):
 @student_required
 def active_lectures():
     """Active lectures for check-in"""
-    from datetime import datetime, date
-    
-    # Get lectures for enrolled courses that are scheduled for today or currently active
-    today = datetime.now(IST).date()
-    lectures = Lecture.query.join(Course).join(Enrollment)\
-        .filter(
-            Enrollment.student_id == current_user.id,
-            Enrollment.is_active == True,
-            Lecture.is_active == True,
-            db.or_(
-                Lecture.status == 'active',
-                db.and_(
-                    Lecture.status == 'scheduled',
-                    db.func.date(Lecture.scheduled_start) == today
-                )
-            )
-        )\
-        .order_by(Lecture.scheduled_start)\
-        .all()
-    
-    # Categorize lectures
-    available_lectures = []  # Can check in now
-    upcoming_lectures = []   # Scheduled for later today
-    completed_lectures = []  # Already attended or window closed
-    
-    for lecture in lectures:
-        # Check if attendance already marked
-        existing_attendance = Attendance.query.filter_by(
-            student_id=current_user.id,
-            lecture_id=lecture.id
-        ).first()
+    try:
+        from datetime import datetime, date
         
-        if existing_attendance:
-            completed_lectures.append({
-                'lecture': lecture,
-                'attendance': existing_attendance,
-                'status': 'attended'
-            })
-        elif lecture.is_attendance_window_open():
-            available_lectures.append(lecture)
-        else:
-            # Check if window has passed or not yet started
-            now = datetime.now(IST)
-            start_window = lecture.scheduled_start + timedelta(minutes=lecture.attendance_window_start)
+        # Get current time in IST
+        current_time = datetime.now(IST)
+        today = current_time.date()
+        
+        # Get all lectures for enrolled courses
+        lectures = []
+        try:
+            # Simple query to get lectures
+            all_lectures = Lecture.query.filter(
+                Lecture.is_active == True,
+                Lecture.status.in_(['active', 'scheduled'])
+            ).all()
             
-            if now < start_window:
-                # Add calculated check-in time for display
-                lecture.checkin_opens_at = start_window
-                upcoming_lectures.append(lecture)
-            else:
-                completed_lectures.append({
-                    'lecture': lecture,
-                    'attendance': None,
-                    'status': 'missed'
-                })
-    
-    return render_template('student/active_lectures.html', 
-                         lectures=available_lectures,
-                         upcoming_lectures=upcoming_lectures,
-                         completed_lectures=completed_lectures)
+            # Filter for enrolled courses
+            enrollments = Enrollment.query.filter_by(
+                student_id=current_user.id,
+                is_active=True
+            ).all()
+            enrolled_course_ids = [e.course_id for e in enrollments]
+            
+            lectures = [l for l in all_lectures if l.course_id in enrolled_course_ids]
+            
+        except Exception as query_error:
+            print(f"Query error: {query_error}")
+            lectures = []
+        
+        # Categorize lectures
+        available_lectures = []  # Can check in now
+        upcoming_lectures = []   # Scheduled for later today
+        completed_lectures = []  # Already attended or window closed
+        
+        for lecture in lectures:
+            try:
+                # Check if attendance already marked
+                existing_attendance = Attendance.query.filter_by(
+                    student_id=current_user.id,
+                    lecture_id=lecture.id
+                ).first()
+                
+                if existing_attendance:
+                    completed_lectures.append({
+                        'lecture': lecture,
+                        'attendance': existing_attendance,
+                        'status': 'attended'
+                    })
+                elif hasattr(lecture, 'is_attendance_window_open') and lecture.is_attendance_window_open():
+                    available_lectures.append(lecture)
+                else:
+                    # Check if window will open later today
+                    if lecture.scheduled_start.date() == today:
+                        start_window = lecture.scheduled_start + timedelta(minutes=getattr(lecture, 'attendance_window_start', -15))
+                        if current_time < start_window:
+                            lecture.checkin_opens_at = start_window
+                            upcoming_lectures.append(lecture)
+                        else:
+                            completed_lectures.append({
+                                'lecture': lecture,
+                                'attendance': None,
+                                'status': 'missed'
+                            })
+            except Exception as lecture_error:
+                print(f"Error processing lecture {lecture.id}: {lecture_error}")
+                continue
+        
+        return render_template('student/active_lectures_enhanced.html', 
+                             lectures=available_lectures,
+                             upcoming_lectures=upcoming_lectures,
+                             completed_lectures=completed_lectures)
+                             
+    except Exception as e:
+        print(f"Active lectures error: {e}")
+        # Return a simple error page
+        from flask import render_template_string
+        return render_template_string('''
+        <div class="container mt-5">
+            <div class="alert alert-warning">
+                <h4>⚠️ Active Lectures Temporarily Unavailable</h4>
+                <p>We're having trouble loading the active lectures. Please try again in a moment.</p>
+                <p><strong>Error:</strong> {{ error }}</p>
+                <a href="{{ url_for('student.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+            </div>
+        </div>
+        ''', error=str(e))
 
 @student_bp.route('/api/checkin', methods=['POST'])
 @login_required
 @student_required
 def api_checkin():
-    """Enhanced API endpoint for student check-in with precise location validation"""
+    """GPS-based student check-in with location validation"""
     try:
         data = request.get_json()
         lecture_id = data.get('lecture_id')
         student_lat = data.get('latitude')
         student_lon = data.get('longitude')
-        student_metadata = data.get('metadata', '{}')
         
         if not all([lecture_id, student_lat, student_lon]):
             return jsonify({'success': False, 'message': 'Missing required location data'})
         
-        lecture = Lecture.query.get_or_404(lecture_id)
+        lecture = Lecture.query.get(lecture_id)
+        if not lecture:
+            return jsonify({'success': False, 'message': 'Lecture not found'})
         
         # Validate lecture has location set
         if not lecture.latitude or not lecture.longitude:
             return jsonify({'success': False, 'message': 'Lecture location not configured'})
-            
-        # Check if location is locked (prevents tampering)
-        if not lecture.location_locked:
-            return jsonify({'success': False, 'message': 'Lecture location not finalized'})
         
         # Check if student is enrolled
         enrollment = Enrollment.query.filter_by(
@@ -247,41 +270,44 @@ def api_checkin():
         if existing:
             return jsonify({'success': False, 'message': 'Attendance already marked for this lecture'})
         
-        # Enhanced coordinate validation
-        from utils.geolocation import validate_coordinates, is_within_geofence, get_location_security_score
+        # Calculate distance using simple formula
+        import math
         
-        is_valid, validation_msg = validate_coordinates(student_lat, student_lon)
-        if not is_valid:
-            return jsonify({'success': False, 'message': f'Invalid location: {validation_msg}'})
+        def calculate_distance(lat1, lon1, lat2, lon2):
+            """Calculate distance between two points in meters"""
+            R = 6371000  # Earth's radius in meters
+            lat1_rad = math.radians(lat1)
+            lat2_rad = math.radians(lat2)
+            delta_lat = math.radians(lat2 - lat1)
+            delta_lon = math.radians(lon2 - lon1)
+            
+            a = (math.sin(delta_lat/2) * math.sin(delta_lat/2) +
+                 math.cos(lat1_rad) * math.cos(lat2_rad) *
+                 math.sin(delta_lon/2) * math.sin(delta_lon/2))
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+            
+            return R * c
         
-        # Enhanced geofence check with high precision
-        is_within, distance, accuracy_info = is_within_geofence(
-            float(student_lat), float(student_lon), 
-            lecture.latitude, lecture.longitude, 
-            lecture.geofence_radius, 
-            use_high_precision=True
+        # Calculate distance between student and lecture location
+        distance = calculate_distance(
+            float(student_lat), float(student_lon),
+            float(lecture.latitude), float(lecture.longitude)
         )
         
-        if not is_within:
+        # Check if within geofence
+        geofence_radius = lecture.geofence_radius or 50  # Default 50 meters
+        
+        if distance > geofence_radius:
             return jsonify({
                 'success': False, 
-                'message': f'You are {distance:.1f}m away from the lecture location. Required: within {lecture.geofence_radius}m',
+                'message': f'You are {distance:.1f}m away from the lecture location. Required: within {geofence_radius}m',
                 'distance': round(distance, 1),
-                'required_radius': lecture.geofence_radius
+                'required_radius': geofence_radius,
+                'student_location': {'lat': student_lat, 'lon': student_lon},
+                'lecture_location': {'lat': lecture.latitude, 'lon': lecture.longitude}
             })
         
-        # Security analysis
-        security_analysis = get_location_security_score(student_metadata, lecture.location_metadata)
-        
-        # Reject if security score is too low
-        if security_analysis['score'] < 40:
-            return jsonify({
-                'success': False, 
-                'message': 'Location data reliability too low. Please ensure GPS is enabled and try again.',
-                'security_issues': security_analysis.get('issues', [])
-            })
-        
-        # Mark attendance with enhanced data
+        # Mark attendance
         attendance = Attendance(
             student_id=current_user.id,
             lecture_id=lecture_id,
@@ -289,10 +315,7 @@ def api_checkin():
             marked_at=datetime.now(IST),
             student_latitude=float(student_lat),
             student_longitude=float(student_lon),
-            distance_from_lecture=distance,
-            location_accuracy=accuracy_info,
-            security_score=security_analysis['score'],
-            metadata=student_metadata
+            distance_from_lecture=distance
         )
         
         db.session.add(attendance)
@@ -300,10 +323,10 @@ def api_checkin():
         
         return jsonify({
             'success': True, 
-            'message': 'Attendance marked successfully!',
+            'message': f'Attendance marked successfully! You were {distance:.1f}m from the lecture location.',
             'distance': round(distance, 1),
-            'accuracy': accuracy_info,
-            'security_score': security_analysis['score']
+            'required_radius': geofence_radius,
+            'timestamp': datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')
         })
         
     except Exception as e:

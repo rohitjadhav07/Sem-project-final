@@ -1,458 +1,342 @@
 {% extends "base.html" %}
 
-{% block title %}Mark Attendance - Enhanced{% endblock %}
+{% block title %}Active Lectures - GPS Check-in{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container mt-4">
     <div class="row">
-        <div class="col-md-12">
+        <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2><i class="fas fa-map-marker-alt"></i> Mark Attendance</h2>
-                <a href="{{ url_for('student.dashboard') }}" class="btn btn-secondary">
-                    <i class="fas fa-arrow-left"></i> Back to Dashboard
-                </a>
+                <div>
+                    <h2><i class="fas fa-broadcast-tower"></i> Active Lectures</h2>
+                    <p class="text-muted">Use GPS to mark your attendance for ongoing lectures</p>
+                </div>
+                <div>
+                    <button class="btn btn-outline-primary" onclick="location.reload()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Location Status Display -->
-            <div id="locationStatus" class="alert" style="display: none;"></div>
-            
-            <!-- GPS Accuracy Display -->
-            <div id="locationAccuracy" class="alert" style="display: none;">
-                <strong>GPS Status:</strong> <span id="accuracyText"></span>
-            </div>
-
-            <!-- Available Lectures -->
-            {% if lectures %}
-            <div class="row">
-                {% for lecture in lectures %}
-                <div class="col-md-6 col-lg-4 mb-4">
-                    <div class="card h-100 border-primary">
-                        <div class="card-header bg-primary text-white">
-                            <h6 class="mb-0">
-                                <i class="fas fa-chalkboard-teacher"></i> {{ lecture.title }}
-                            </h6>
+    {% if lectures %}
+        <div class="row">
+            {% for lecture in lectures %}
+            <div class="col-md-6 mb-4">
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">{{ lecture.course.code if lecture.course else 'Unknown Course' }}</h6>
+                            <span class="badge bg-light text-success">Check-in Available</span>
                         </div>
-                        <div class="card-body">
-                            <div class="mb-2">
-                                <strong>Course:</strong> {{ lecture.course.code }} - {{ lecture.course.name }}
+                    </div>
+                    <div class="card-body">
+                        <h6 class="card-title">{{ lecture.title }}</h6>
+                        <p class="card-text">{{ lecture.description or 'No description available' }}</p>
+                        
+                        <div class="row text-center mb-3">
+                            <div class="col-6">
+                                <small class="text-muted">Start Time</small>
+                                <br><strong>{{ lecture.scheduled_start.strftime('%H:%M') if lecture.scheduled_start else 'N/A' }}</strong>
                             </div>
-                            <div class="mb-2">
-                                <strong>Time:</strong> {{ lecture.scheduled_start.strftime('%H:%M') if lecture.scheduled_start else 'N/A' }}
-                            </div>
-                            <div class="mb-2">
-                                <strong>Status:</strong> 
-                                <span class=\"badge badge-{{ 'success' if lecture.status == 'active' else 'info' }}\">
-                                    {{ lecture.status|title }}
-                                </span>
-                            </div>
-                            
-                            <!-- Location Requirements -->
-                            <div class="mb-3">
-                                <small class="text-muted">
-                                    <i class="fas fa-crosshairs"></i> Required within {{ lecture.geofence_radius }}m
-                                    {% if lecture.min_accuracy_required %}
-                                    <br><i class="fas fa-satellite"></i> GPS accuracy: ≤{{ lecture.min_accuracy_required }}m
-                                    {% endif %}
-                                </small>
-                            </div>
-
-                            <!-- Security Info -->
-                            {% set security_info = lecture.get_location_security_info() %}
-                            <div class="mb-3">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <small class="text-muted">Location Security:</small>
-                                    <span class="badge badge-{{ 'success' if security_info.precision_level == 'high' else 'warning' if security_info.precision_level == 'medium' else 'danger' }}">
-                                        {{ security_info.precision_level|title }}
-                                    </span>
-                                </div>
-                                {% if security_info.is_locked %}
-                                <small class="text-success"><i class="fas fa-lock"></i> Location Secured</small>
-                                {% endif %}
+                            <div class="col-6">
+                                <small class="text-muted">End Time</small>
+                                <br><strong>{{ lecture.scheduled_end.strftime('%H:%M') if lecture.scheduled_end else 'N/A' }}</strong>
                             </div>
                         </div>
-                        <div class="card-footer">
-                            <button class="btn btn-success btn-block" 
-                                    onclick="markAttendanceEnhanced({{ lecture.id }}, '{{ lecture.title }}', {{ lecture.geofence_radius }}, {{ lecture.min_accuracy_required or 20 }})"
-                                    id="attendanceBtn{{ lecture.id }}">
-                                <i class="fas fa-map-pin"></i> Mark Attendance
+                        
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                <i class="fas fa-map-marker-alt"></i> {{ lecture.location_name or 'Location not specified' }}
+                            </small>
+                            <br><small class="text-muted">GPS Coordinates: {{ lecture.latitude }}, {{ lecture.longitude }}</small>
+                            <br><small class="text-muted">Required: Within {{ lecture.geofence_radius or 50 }} meters</small>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button class="btn btn-success btn-lg" 
+                                    onclick="startGPSCheckin({{ lecture.id }}, '{{ lecture.title }}', {{ lecture.latitude }}, {{ lecture.longitude }}, {{ lecture.geofence_radius or 50 }})">
+                                <i class="fas fa-satellite-dish"></i> GPS Check-in
                             </button>
                         </div>
                     </div>
                 </div>
-                {% endfor %}
             </div>
-            {% else %}
-            <div class="text-center py-5">
-                <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
-                <h4 class="text-muted">No Active Lectures</h4>
-                <p class="text-muted">There are no lectures available for attendance marking at this time.</p>
-                <a href="{{ url_for('student.dashboard') }}" class="btn btn-primary">
-                    <i class="fas fa-home"></i> Go to Dashboard
-                </a>
-            </div>
-            {% endif %}
+            {% endfor %}
         </div>
-    </div>
+    {% else %}
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle fa-3x mb-3"></i>
+            <h5>No Active Lectures</h5>
+            <p>There are no lectures available for check-in at the moment.</p>
+            <button class="btn btn-outline-primary" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    {% endif %}
+
+    {% if upcoming_lectures %}
+        <div class="row mt-5">
+            <div class="col-12">
+                <h4 class="text-warning"><i class="fas fa-clock"></i> Upcoming Today</h4>
+            </div>
+            {% for item in upcoming_lectures %}
+            <div class="col-md-6 mb-3">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="mb-0">{{ item.course.code if item.course else 'Unknown Course' }} - {{ item.title }}</h6>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Starts:</strong> {{ item.scheduled_start.strftime('%H:%M') if item.scheduled_start else 'N/A' }}</p>
+                        <p><strong>Check-in opens:</strong> {{ item.checkin_opens_at.strftime('%H:%M') if item.checkin_opens_at else 'N/A' }}</p>
+                        <div class="alert alert-info">
+                            <small><i class="fas fa-info-circle"></i> Check-in will be available soon.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if completed_lectures %}
+        <div class="row mt-5">
+            <div class="col-12">
+                <h4 class="text-secondary"><i class="fas fa-history"></i> Today's Completed</h4>
+            </div>
+            {% for item in completed_lectures %}
+            <div class="col-md-6 mb-3">
+                <div class="card border-secondary">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">{{ item.lecture.course.code if item.lecture.course else 'Unknown Course' }} - {{ item.lecture.title }}</h6>
+                    </div>
+                    <div class="card-body">
+                        {% if item.attendance %}
+                            <div class="alert alert-success">
+                                <i class="fas fa-check"></i> <strong>Attended</strong><br>
+                                <small>Marked at: {{ item.attendance.marked_at.strftime('%H:%M') if item.attendance.marked_at else 'N/A' }}</small>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-danger">
+                                <i class="fas fa-times"></i> <strong>Missed</strong><br>
+                                <small>Attendance window closed</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
 </div>
 
-<!-- Location Details Modal -->
-<div class="modal fade" id="locationModal" tabindex="-1">
+<!-- GPS Status Modal -->
+<div class="modal fade" id="gpsModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-crosshairs"></i> Location Verification</h5>
-                <button type="button" class="close" data-dismiss="modal">
-                    <span>&times;</span>
-                </button>
+                <h5 class="modal-title">
+                    <i class="fas fa-satellite-dish"></i> GPS Check-in
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div id="locationDetails">
-                    <div class="text-center">
-                        <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
-                        <p>Capturing precise location...</p>
+                <div id="gpsStatus" class="alert alert-info">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2"></div>
+                        <span>Getting your GPS location...</span>
+                    </div>
+                </div>
+                
+                <div id="locationDetails" style="display: none;">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 id="lectureName" class="card-title"></h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="text-muted">Your Distance</small>
+                                    <br><strong id="userDistance">-</strong> meters
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Required</small>
+                                    <br><strong id="requiredDistance">-</strong> meters
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">GPS Accuracy: <span id="gpsAccuracy">-</span> meters</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" id="confirmAttendance" disabled>
-                    <i class="fas fa-check"></i> Confirm Attendance
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmGPSCheckin" disabled>
+                    <i class="fas fa-check"></i> Confirm Check-in
                 </button>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
-// Enhanced attendance marking with security features
 let currentLecture = null;
-let locationData = null;
-let securityScore = 0;
+let userLocation = null;
 
-function markAttendanceEnhanced(lectureId, lectureTitle, geofenceRadius, requiredAccuracy) {
+function startGPSCheckin(lectureId, title, lectureLat, lectureLon, radius) {
     currentLecture = {
         id: lectureId,
-        title: lectureTitle,
-        radius: geofenceRadius,
-        requiredAccuracy: requiredAccuracy
+        title: title,
+        latitude: lectureLat,
+        longitude: lectureLon,
+        radius: radius
     };
     
     // Show modal
-    $('#locationModal').modal('show');
+    const modal = new bootstrap.Modal(document.getElementById('gpsModal'));
+    modal.show();
     
-    // Reset state
-    locationData = null;
-    securityScore = 0;
-    document.getElementById('confirmAttendance').disabled = true;
+    // Update lecture info
+    document.getElementById('lectureName').textContent = title;
+    document.getElementById('requiredDistance').textContent = radius;
     
-    // Start location capture
-    captureEnhancedLocation();
-}
-
-function captureEnhancedLocation() {
-    if (!navigator.geolocation) {
-        showLocationError('Geolocation is not supported by this browser.');
-        return;
-    }
-    
-    showLocationStatus('Initializing GPS...');
-    
-    // Enhanced geolocation options
-    const options = {
-        enableHighAccuracy: true,
-        timeout: 45000,
-        maximumAge: 30000  // Accept cached location up to 30 seconds old
-    };
-    
-    // Try multiple captures for best accuracy
-    let attempts = 0;
-    let bestLocation = null;
-    const maxAttempts = 3;
-    
-    function attemptCapture() {
-        attempts++;
-        showLocationStatus(`Capturing location... Attempt ${attempts}/${maxAttempts}`);
-        
-        navigator.geolocation.getCurrentPosition(function(position) {
-            const accuracy = position.coords.accuracy;
-            
-            // Keep the best accuracy
-            if (!bestLocation || accuracy < bestLocation.coords.accuracy) {
-                bestLocation = position;
-            }
-            
-            // Continue if we haven't reached max attempts and accuracy isn't good enough
-            if (attempts < maxAttempts && accuracy > currentLecture.requiredAccuracy) {
-                setTimeout(attemptCapture, 2000);
-            } else {
-                processLocationData(bestLocation);
-            }
-        }, function(error) {
-            if (attempts < maxAttempts) {
-                setTimeout(attemptCapture, 2000);
-            } else {
-                handleLocationError(error);
-            }
-        }, options);
-    }
-    
-    attemptCapture();
-}
-
-function processLocationData(position) {
-    const accuracy = position.coords.accuracy;
-    
-    // Prepare enhanced metadata
-    locationData = {
-        lecture_id: currentLecture.id,
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        metadata: JSON.stringify({
-            accuracy: accuracy,
-            altitude: position.coords.altitude,
-            altitudeAccuracy: position.coords.altitudeAccuracy,
-            heading: position.coords.heading,
-            speed: position.coords.speed,
-            timestamp: new Date().toISOString(),
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            language: navigator.language,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            screenResolution: `${screen.width}x${screen.height}`,
-            captureMode: 'enhanced_multi_attempt'
-        })
-    };
-    
-    // Calculate security score
-    securityScore = calculateSecurityScore(position, accuracy);
-    
-    // Show location details
-    showLocationDetails(position, accuracy, securityScore);
-    
-    // Enable confirmation if security score is acceptable
-    if (securityScore >= 60) {
-        document.getElementById('confirmAttendance').disabled = false;
-        document.getElementById('confirmAttendance').onclick = submitAttendance;
-    } else {
-        showLocationWarning('Location security score too low. Please try again in an area with better GPS signal.');
-    }
-}
-
-function calculateSecurityScore(position, accuracy) {
-    let score = 100;
-    
-    // Accuracy penalty
-    if (accuracy > 50) score -= 40;
-    else if (accuracy > 20) score -= 20;
-    else if (accuracy > 10) score -= 10;
-    
-    // Speed penalty (if moving)
-    if (position.coords.speed && position.coords.speed > 2) {
-        score -= 20;
-    }
-    
-    // Missing data penalty
-    if (!position.coords.altitude) score -= 5;
-    if (!position.coords.heading) score -= 5;
-    
-    // Bonus for high accuracy
-    if (accuracy <= 5) score += 10;
-    
-    return Math.max(0, Math.min(100, score));
-}
-
-function showLocationDetails(position, accuracy, score) {
-    const details = document.getElementById('locationDetails');
-    
-    let accuracyClass = 'success';
-    let accuracyIcon = 'check-circle';
-    if (accuracy > 20) {
-        accuracyClass = 'danger';
-        accuracyIcon = 'times-circle';
-    } else if (accuracy > 10) {
-        accuracyClass = 'warning';
-        accuracyIcon = 'exclamation-triangle';
-    }
-    
-    let scoreClass = 'success';
-    if (score < 60) scoreClass = 'danger';
-    else if (score < 80) scoreClass = 'warning';
-    
-    details.innerHTML = `
-        <div class="row">
-            <div class="col-6"><strong>Latitude:</strong></div>
-            <div class="col-6">${position.coords.latitude.toFixed(8)}</div>
+    // Reset status
+    document.getElementById('gpsStatus').className = 'alert alert-info';
+    document.getElementById('gpsStatus').innerHTML = `
+        <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2"></div>
+            <span>Getting your GPS location...</span>
         </div>
-        <div class="row">
-            <div class="col-6"><strong>Longitude:</strong></div>
-            <div class="col-6">${position.coords.longitude.toFixed(8)}</div>
-        </div>
-        <div class="row">
-            <div class="col-6"><strong>GPS Accuracy:</strong></div>
-            <div class="col-6">
-                <span class="text-${accuracyClass}">
-                    <i class="fas fa-${accuracyIcon}"></i> ±${Math.round(accuracy)}m
-                </span>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-6"><strong>Required:</strong></div>
-            <div class="col-6">≤${currentLecture.requiredAccuracy}m</div>
-        </div>
-        <div class="row">
-            <div class="col-6"><strong>Security Score:</strong></div>
-            <div class="col-6">
-                <span class="text-${scoreClass}">
-                    <strong>${score}%</strong>
-                </span>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col-6"><strong>Captured:</strong></div>
-            <div class="col-6">${new Date().toLocaleTimeString()}</div>
-        </div>
-        
-        ${accuracy > currentLecture.requiredAccuracy ? 
-            `<div class="alert alert-warning mt-3">
-                <i class="fas fa-exclamation-triangle"></i> 
-                GPS accuracy (±${Math.round(accuracy)}m) exceeds required accuracy (≤${currentLecture.requiredAccuracy}m).
-                Consider moving to an area with better GPS signal.
-            </div>` : ''}
-        
-        ${score < 60 ? 
-            `<div class="alert alert-danger mt-3">
-                <i class="fas fa-shield-alt"></i> 
-                Security score too low. Please ensure GPS is enabled and you're not moving.
-            </div>` : ''}
     `;
+    document.getElementById('locationDetails').style.display = 'none';
+    document.getElementById('confirmGPSCheckin').disabled = true;
+    
+    // Request location permission and get GPS coordinates
+    if (navigator.geolocation) {
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+        };
+        
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                userLocation = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy
+                };
+                
+                // Calculate distance
+                const distance = calculateDistance(
+                    userLocation.latitude, userLocation.longitude,
+                    currentLecture.latitude, currentLecture.longitude
+                );
+                
+                // Update UI
+                document.getElementById('userDistance').textContent = Math.round(distance);
+                document.getElementById('gpsAccuracy').textContent = Math.round(userLocation.accuracy);
+                document.getElementById('locationDetails').style.display = 'block';
+                
+                if (distance <= currentLecture.radius) {
+                    document.getElementById('gpsStatus').className = 'alert alert-success';
+                    document.getElementById('gpsStatus').innerHTML = 
+                        '<i class="fas fa-check-circle"></i> <strong>Perfect!</strong> You are within the lecture area.';
+                    document.getElementById('confirmGPSCheckin').disabled = false;
+                } else {
+                    document.getElementById('gpsStatus').className = 'alert alert-warning';
+                    document.getElementById('gpsStatus').innerHTML = 
+                        `<i class="fas fa-exclamation-triangle"></i> <strong>Too far!</strong> You need to be within ${currentLecture.radius}m of the lecture location.`;
+                }
+            },
+            function(error) {
+                let errorMessage = 'Unable to get your location.';
+                let helpText = '';
+                
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMessage = 'Location access denied.';
+                        helpText = 'Please enable location services for this website and try again.';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMessage = 'Location information unavailable.';
+                        helpText = 'Please ensure GPS is enabled and you have a clear view of the sky.';
+                        break;
+                    case error.TIMEOUT:
+                        errorMessage = 'Location request timed out.';
+                        helpText = 'Please try again or move to an area with better GPS signal.';
+                        break;
+                }
+                
+                document.getElementById('gpsStatus').className = 'alert alert-danger';
+                document.getElementById('gpsStatus').innerHTML = 
+                    `<i class="fas fa-times-circle"></i> <strong>GPS Error:</strong> ${errorMessage}<br><small>${helpText}</small>`;
+            },
+            options
+        );
+    } else {
+        document.getElementById('gpsStatus').className = 'alert alert-danger';
+        document.getElementById('gpsStatus').innerHTML = 
+            '<i class="fas fa-times-circle"></i> <strong>Error:</strong> GPS is not supported by this browser.';
+    }
 }
 
-function submitAttendance() {
-    if (!locationData) {
-        alert('No location data available');
-        return;
-    }
+document.getElementById('confirmGPSCheckin').addEventListener('click', function() {
+    if (!userLocation || !currentLecture) return;
     
-    // Disable button and show loading
-    const btn = document.getElementById('confirmAttendance');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
-    btn.disabled = true;
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Marking attendance...';
     
     fetch('/student/api/checkin', {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json'
         },
-        body: JSON.stringify(locationData)
+        body: JSON.stringify({
+            lecture_id: currentLecture.id,
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude
+        })
     })
     .then(response => response.json())
     .then(data => {
-        btn.innerHTML = originalText;
-        
         if (data.success) {
-            // Success message with details
-            let message = 'Attendance marked successfully!';
-            if (data.distance !== undefined) {
-                message += `\\n\\nDistance from lecture: ${data.distance}m`;
-            }
-            if (data.security_score !== undefined) {
-                message += `\\nSecurity score: ${data.security_score}%`;
-            }
-            if (data.accuracy) {
-                message += `\\nLocation method: ${data.accuracy}`;
-            }
+            // Hide GPS modal
+            bootstrap.Modal.getInstance(document.getElementById('gpsModal')).hide();
             
-            alert(message);
-            $('#locationModal').modal('hide');
-            location.reload();
+            // Show success message
+            alert(`✅ ${data.message}\n\n📍 Distance: ${data.distance}m\n⏰ Time: ${data.timestamp || new Date().toLocaleString()}`);
+            
+            // Refresh page to update status
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
         } else {
-            // Enhanced error handling
-            let errorMessage = data.message || 'Unknown error occurred';
-            
-            if (data.distance !== undefined && data.required_radius !== undefined) {
-                errorMessage += `\\n\\nYou are ${data.distance}m away from the lecture location.`;
-                errorMessage += `\\nYou need to be within ${data.required_radius}m to mark attendance.`;
-            }
-            
-            if (data.security_issues && data.security_issues.length > 0) {
-                errorMessage += '\\n\\nSecurity issues detected:';
-                data.security_issues.forEach(issue => {
-                    switch(issue) {
-                        case 'poor_student_accuracy':
-                            errorMessage += '\\n• GPS accuracy is poor';
-                            break;
-                        case 'student_moving_fast':
-                            errorMessage += '\\n• You appear to be moving too fast';
-                            break;
-                        case 'stale_location':
-                            errorMessage += '\\n• Location data is too old';
-                            break;
-                        default:
-                            errorMessage += `\\n• ${issue}`;
-                    }
-                });
-                errorMessage += '\\n\\nTry moving to an area with better GPS signal and ensure you are stationary.';
-            }
-            
-            alert(errorMessage);
-            btn.disabled = false;
+            alert(`❌ Check-in failed: ${data.message}`);
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-check"></i> Confirm Check-in';
         }
     })
     .catch(error => {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
         console.error('Error:', error);
-        alert('Network error occurred. Please check your connection and try again.');
+        alert('❌ Check-in failed. Please try again.');
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-check"></i> Confirm Check-in';
     });
-}
+});
 
-function showLocationStatus(message) {
-    const statusDiv = document.getElementById('locationStatus');
-    statusDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${message}`;
-    statusDiv.style.display = 'block';
-    statusDiv.className = 'alert alert-info';
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
-
-function showLocationError(message) {
-    const statusDiv = document.getElementById('locationStatus');
-    statusDiv.innerHTML = `<i class="fas fa-times-circle"></i> ${message}`;
-    statusDiv.className = 'alert alert-danger';
-    statusDiv.style.display = 'block';
-}
-
-function showLocationWarning(message) {
-    const statusDiv = document.getElementById('locationStatus');
-    statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
-    statusDiv.className = 'alert alert-warning';
-    statusDiv.style.display = 'block';
-}
-
-function handleLocationError(error) {
-    let errorMessage = 'Error getting location: ';
-    switch(error.code) {
-        case error.PERMISSION_DENIED:
-            errorMessage += 'Location access denied. Please enable location services for this website.';
-            break;
-        case error.POSITION_UNAVAILABLE:
-            errorMessage += 'Location information unavailable. Please ensure GPS is enabled and try moving to an area with better signal.';
-            break;
-        case error.TIMEOUT:
-            errorMessage += 'Location request timed out. Please try again.';
-            break;
-        default:
-            errorMessage += error.message;
-            break;
-    }
-    
-    showLocationError(errorMessage);
-}
-
-// Auto-refresh every 30 seconds to check for new lectures
-setInterval(function() {
-    if (!document.querySelector('.modal.show')) {
-        location.reload();
-    }
-}, 30000);
 </script>
 {% endblock %}
