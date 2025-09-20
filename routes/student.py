@@ -6,7 +6,7 @@ from models.lecture import Lecture
 from models.attendance import Attendance
 from models.course import Course
 from utils.auth import student_required
-from app import db
+from extensions import db
 
 # IST timezone (UTC+5:30)
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -562,6 +562,13 @@ def debug_lectures():
         })
     
     return f"<pre>{debug_info}</pre>"
+
+@student_bp.route('/lectures/active')
+@login_required
+@student_required
+def lectures_active():
+    """API endpoint for active lectures (used by AJAX)"""
+    return api_active_lectures()
 
 @student_bp.route('/api/active-lectures')
 @login_required

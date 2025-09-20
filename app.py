@@ -38,6 +38,7 @@ def create_app(config_name=None):
     from routes.attendance import attendance_bp
     from routes.api import api_bp
     from debug_routes import debug_bp
+    from test_routes import test_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(admin_bp, url_prefix='/admin')
@@ -46,6 +47,7 @@ def create_app(config_name=None):
     app.register_blueprint(attendance_bp, url_prefix='/attendance')
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(debug_bp)
+    app.register_blueprint(test_bp)
     
     # Add location test route
     @app.route('/test/location')
