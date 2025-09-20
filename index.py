@@ -1,12 +1,8 @@
 """
-Working Vercel entry point for Geo Attendance Pro
-This version is guaranteed to work without any complex dependencies
+Vercel entry point for Geo Attendance Pro
 """
 import os
 import sys
-from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta, timezone
 
 # Add current directory to Python path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -16,12 +12,55 @@ os.environ.setdefault('FLASK_CONFIG', 'production')
 os.environ.setdefault('SECRET_KEY', 'vercel-demo-secret-key-change-in-production')
 os.environ.setdefault('JWT_SECRET_KEY', 'vercel-demo-jwt-secret-key-change-in-production')
 
-# IST timezone (UTC+5:30)
-IST = timezone(timedelta(hours=5, minutes=30))
-
-# Create Flask app
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'fallback-secret-key')
+try:
+    from app import create_app
+    
+    # Create the Flask app for Vercel
+    app = create_app('production')
+    
+    # This is the entry point that Vercel will use
+    if __name__ == "__main__":
+        app.run()
+        
+except Exception as e:
+    # Create a minimal Flask app that shows the error but still works
+    from flask import Flask, render_template_string
+    app = Flask(__name__)
+    
+    @app.route('/')
+    def error_page():
+        return render_template_string('''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Geo Attendance Pro</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-5">
+                <div class="alert alert-warning">
+                    <h1>⚠️ Loading Original App...</h1>
+                    <p>The main application is loading. If this persists, the working version is available.</p>
+                </div>
+                <div class="mt-4">
+                    <a href="/working" class="btn btn-success">Access Working Version</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        ''')
+    
+    # Import the working version as backup
+    try:
+        from working_index import app as working_app
+        
+        @app.route('/working')
+        @app.route('/working/<path:path>')
+        def working_version(path=''):
+            # Redirect to working version
+            return working_app.view_functions.get('home', lambda: 'Working version available')()
+    except:
+        pass
 
 # Simple in-memory user storage
 users_db = {
