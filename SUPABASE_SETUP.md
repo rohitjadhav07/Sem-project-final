@@ -21,19 +21,52 @@ This guide will help you set up Supabase as the database for your Geo Attendance
 
 ## 🔑 Step 2: Get Your Credentials
 
-Once your project is ready:
+### 📍 Finding SUPABASE_URL and API Keys
 
 1. **Go to Settings → API**
-2. **Copy these values:**
-   - **Project URL**: `https://your-project.supabase.co`
-   - **Anon (public) key**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
-   - **Service role key**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+   ```
+   Dashboard → Settings (left sidebar) → API
+   ```
 
-3. **Go to Settings → Database**
-4. **Copy the Connection String:**
-   - Look for "Connection string" → "URI"
-   - Copy the PostgreSQL URI: `postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres`
-   - Replace `[password]` with your database password from Step 1
+2. **In the "Configuration" section, copy:**
+   - **Project URL**: `https://yourprojectref.supabase.co`
+   - This is your **SUPABASE_URL**
+
+3. **In the "Project API keys" section, copy:**
+   - **anon public**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+     - This is your **SUPABASE_ANON_KEY**
+   - **service_role secret**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+     - This is your **SUPABASE_SERVICE_ROLE_KEY** ⭐
+
+### 📍 Finding SUPABASE_DATABASE_URL
+
+1. **Go to Settings → Database**
+   ```
+   Dashboard → Settings (left sidebar) → Database
+   ```
+
+2. **Scroll down to "Connection info" section**
+
+3. **Click on "Connection string" tab**
+
+4. **Click on "URI" option**
+
+5. **Copy the PostgreSQL URI:**
+   ```
+   postgresql://postgres.yourprojectref:YOUR_PASSWORD@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+   ```
+
+6. **⚠️ IMPORTANT:** Replace `YOUR_PASSWORD` with the database password you created in Step 1!
+
+### 🔍 What Each Credential Looks Like:
+
+```bash
+# Example credentials (yours will be different):
+SUPABASE_URL=https://abcdefghijklmnop.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiY2RlZmdoaWprbG1ub3AiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTY5...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFiY2RlZmdoaWprbG1ub3AiLCJyb2xlIjoic2VydmljZV9yb2xlIiwiaWF0IjoxNjk...
+SUPABASE_DATABASE_URL=postgresql://postgres.abcdefghijklmnop:your-actual-password@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+```
 
 ## ⚙️ Step 3: Configure Vercel Environment Variables
 

@@ -56,20 +56,28 @@ def test_supabase():
             <p><strong>Has Service Key:</strong> {'✅ Yes' if supabase_config.supabase_service_key else '❌ No'}</p>
         </div>
         
-        <h3>📋 Setup Instructions</h3>
-        <p>If Supabase is not configured, follow these steps:</p>
+        <h3>📋 How to Get Supabase Credentials</h3>
+        <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 10px 0;">
+            <h4>🔑 SUPABASE_SERVICE_ROLE_KEY:</h4>
+            <p><strong>Location:</strong> Dashboard → Settings → API → Project API keys → <code>service_role</code> <code>secret</code></p>
+            
+            <h4>🗄️ SUPABASE_DATABASE_URL:</h4>
+            <p><strong>Location:</strong> Dashboard → Settings → Database → Connection info → Connection string → URI</p>
+            <p><strong>Format:</strong> <code>postgresql://postgres.yourref:PASSWORD@aws-0-us-east-1.pooler.supabase.com:6543/postgres</code></p>
+            <p><strong>⚠️ Important:</strong> Replace <code>PASSWORD</code> with your actual database password!</p>
+        </div>
+        
+        <h3>🚀 Quick Setup Steps</h3>
         <ol>
-            <li>Create a Supabase project at <a href="https://supabase.com" target="_blank">supabase.com</a></li>
-            <li>Get your project URL and API keys</li>
-            <li>Set environment variables in Vercel:
+            <li><strong>Create Supabase project:</strong> <a href="https://supabase.com" target="_blank">supabase.com</a></li>
+            <li><strong>Get credentials from:</strong>
                 <ul>
-                    <li>SUPABASE_URL</li>
-                    <li>SUPABASE_ANON_KEY</li>
-                    <li>SUPABASE_SERVICE_ROLE_KEY</li>
-                    <li>SUPABASE_DATABASE_URL</li>
+                    <li><strong>Settings → API:</strong> Project URL, anon key, service_role key</li>
+                    <li><strong>Settings → Database:</strong> Connection string (URI format)</li>
                 </ul>
             </li>
-            <li>Redeploy your app</li>
+            <li><strong>Set in Vercel:</strong> Environment Variables section</li>
+            <li><strong>Redeploy:</strong> App will automatically use Supabase</li>
         </ol>
         
         <p><a href="/test/db">Test Database Connection</a> | <a href="/">Back to Home</a></p>
