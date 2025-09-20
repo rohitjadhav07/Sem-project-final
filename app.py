@@ -30,52 +30,53 @@ def create_app(config_name=None):
         from models.user import User
         return User.query.get(int(user_id))
     
-    # Register blueprints
-    from routes.auth import auth_bp
-    from routes.admin import admin_bp
-    from routes.teacher import teacher_bp
-    from routes.student import student_bp
-    from routes.attendance import attendance_bp
-    from routes.api import api_bp
-    # Register blueprints
-    from routes.auth import auth_bp
-    from routes.admin import admin_bp
-    from routes.teacher import teacher_bp
-    from routes.student import student_bp
-    from routes.attendance import attendance_bp
-    from routes.api import api_bp
-    from routes.main import main_bp
+    # Register blueprints with error handling
+    blueprints = [
+        ('routes.auth', 'auth_bp', '/auth'),
+        ('routes.admin', 'admin_bp', '/admin'),
+        ('routes.teacher', 'teacher_bp', '/teacher'),
+        ('routes.student', 'student_bp', '/student'),
+        ('routes.attendance', 'attendance_bp', '/attendance'),
+        ('routes.api', 'api_bp', '/api'),
+        ('routes.main', 'main_bp', ''),
+    ]
     
-    app.register_blueprint(auth_bp, url_prefix='/auth')
-    app.register_blueprint(admin_bp, url_prefix='/admin')
-    app.register_blueprint(teacher_bp, url_prefix='/teacher')
-    app.register_blueprint(student_bp, url_prefix='/student')
-    app.register_blueprint(attendance_bp, url_prefix='/attendance')
-    app.register_blueprint(api_bp, url_prefix='/api')
-    app.register_blueprint(main_bp)
+    for module_name, blueprint_name, url_prefix in blueprints:
+        try:
+            module = __import__(module_name, fromlist=[blueprint_name])
+            blueprint = getattr(module, blueprint_name)
+            if url_prefix:
+                app.register_blueprint(blueprint, url_prefix=url_prefix)
+            else:
+                app.register_blueprint(blueprint)
+            print(f"✅ Registered {blueprint_name}")
+        except Exception as e:
+            print(f"⚠️ Could not register {blueprint_name}: {e}")
     
-    # Register debug and test routes if available
-    try:
-        from debug_routes import debug_bp
-        app.register_blueprint(debug_bp)
-    except ImportError:
-        pass
+    # Register optional blueprints
+    optional_blueprints = [
+        ('debug_routes', 'debug_bp'),
+        ('test_routes', 'test_bp'),
+        ('simple_active_lectures', 'simple_bp'),
+    ]
     
-    try:
-        from test_routes import test_bp
-        app.register_blueprint(test_bp)
-    except ImportError:
-        pass
+    for module_name, blueprint_name in optional_blueprints:
+        try:
+            module = __import__(module_name, fromlist=[blueprint_name])
+            blueprint = getattr(module, blueprint_name)
+            app.register_blueprint(blueprint)
+            print(f"✅ Registered optional {blueprint_name}")
+        except Exception as e:
+            print(f"⚠️ Optional blueprint {blueprint_name} not available: {e}")
     
     # Add location test route
     @app.route('/test/location')
     def location_test():
-        from flask import render_template
-        return render_template('test/location_test.html')
-    
-    # Main route
-    from routes.main import main_bp
-    app.register_blueprint(main_bp)
+        try:
+            from flask import render_template
+            return render_template('test/location_test.html')
+        except Exception as e:
+            return f"Location test page not available: {e}"
     
     # Initialize database tables and sample data
     with app.app_context():
