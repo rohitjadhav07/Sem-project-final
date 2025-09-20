@@ -259,8 +259,10 @@ def init_fallback_data():
 def test_supabase_connection():
     """Test Supabase connection"""
     try:
+        from supabase_config import supabase_config
+        
         if not supabase_config.is_configured():
-            return False, "Supabase not configured"
+            return False, "Supabase not configured or dependencies missing"
         
         client = supabase_config.get_supabase_client()
         if not client:
@@ -270,6 +272,8 @@ def test_supabase_connection():
         response = client.table('users').select('id').limit(1).execute()
         return True, "Supabase connection successful"
         
+    except ImportError:
+        return False, "Supabase dependencies not installed"
     except Exception as e:
         return False, f"Supabase connection failed: {str(e)}"
 

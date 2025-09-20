@@ -33,8 +33,22 @@ def test_db():
 def test_supabase():
     """Test Supabase connection and configuration"""
     try:
-        from supabase_config import supabase_config
+        from supabase_config import supabase_config, SUPABASE_AVAILABLE
         from init_supabase import test_supabase_connection
+        
+        # Check if Supabase dependencies are available
+        if not SUPABASE_AVAILABLE:
+            return f"""
+            <h2>⚠️ Supabase Dependencies Not Available</h2>
+            <div style="font-family: monospace; background: #fff3cd; padding: 20px; border-radius: 8px;">
+                <p><strong>Status:</strong> Supabase Python library not installed</p>
+                <p><strong>Current Database:</strong> Using SQLite fallback</p>
+                <p><strong>To Enable Supabase:</strong> Add dependencies to requirements.txt:</p>
+                <pre>psycopg2-binary==2.9.9
+supabase==2.3.4</pre>
+            </div>
+            <p><a href="/test/db">Test Current Database</a> | <a href="/">Back to Home</a></p>
+            """
         
         # Check configuration
         is_configured = supabase_config.is_configured()
@@ -48,6 +62,7 @@ def test_supabase():
         result = f"""
         <h2>🔍 Supabase Test Results</h2>
         <div style="font-family: monospace; background: #f5f5f5; padding: 20px; border-radius: 8px;">
+            <p><strong>Dependencies Available:</strong> {'✅ Yes' if SUPABASE_AVAILABLE else '❌ No'}</p>
             <p><strong>Configuration Status:</strong> {'✅ Configured' if is_configured else '❌ Not Configured'}</p>
             <p><strong>Connection Test:</strong> {'✅' if connection_success else '❌'} {connection_message}</p>
             <p><strong>Database URL:</strong> {database_url[:50]}...</p>

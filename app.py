@@ -63,9 +63,23 @@ def create_app(config_name=None):
     
     # Initialize database tables and sample data
     with app.app_context():
-        from init_supabase import create_supabase_tables, init_supabase_data
-        create_supabase_tables()
-        init_supabase_data()
+        try:
+            from init_supabase import create_supabase_tables, init_supabase_data
+            create_supabase_tables()
+            init_supabase_data()
+        except ImportError:
+            # Fallback to SQLite initialization if Supabase not available
+            print("⚠️ Supabase not available, using SQLite fallback")
+            from init_sample_data import init_sample_data
+            init_sample_data()
+        except Exception as e:
+            print(f"⚠️ Database initialization error: {e}")
+            # Try fallback initialization
+            try:
+                from init_sample_data import init_sample_data
+                init_sample_data()
+            except Exception as fallback_error:
+                print(f"❌ Fallback initialization also failed: {fallback_error}")
     
     return app
 

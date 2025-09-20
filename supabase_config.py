@@ -2,9 +2,14 @@
 Supabase configuration and setup
 """
 import os
-from supabase import create_client, Client
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+
+# Try to import Supabase, but handle gracefully if not available
+try:
+    from supabase import create_client, Client
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
+    Client = None
 
 class SupabaseConfig:
     """Supabase configuration class"""
@@ -18,8 +23,11 @@ class SupabaseConfig:
         
         # Initialize Supabase client
         self.supabase_client = None
-        if self.supabase_url and self.supabase_key:
-            self.supabase_client = create_client(self.supabase_url, self.supabase_key)
+        if SUPABASE_AVAILABLE and self.supabase_url and self.supabase_key:
+            try:
+                self.supabase_client = create_client(self.supabase_url, self.supabase_key)
+            except Exception as e:
+                print(f"⚠️ Could not initialize Supabase client: {e}")
     
     def get_database_url(self):
         """Get the PostgreSQL database URL for SQLAlchemy"""
@@ -35,7 +43,7 @@ class SupabaseConfig:
     
     def is_configured(self):
         """Check if Supabase is properly configured"""
-        return bool(self.supabase_url and self.supabase_key and self.database_url)
+        return bool(SUPABASE_AVAILABLE and self.supabase_url and self.supabase_key and self.database_url)
 
 # Global instance
 supabase_config = SupabaseConfig()
