@@ -29,6 +29,57 @@ def test_db():
     except Exception as e:
         return f"❌ Database error: {str(e)}"
 
+@test_bp.route('/test/supabase')
+def test_supabase():
+    """Test Supabase connection and configuration"""
+    try:
+        from supabase_config import supabase_config
+        from init_supabase import test_supabase_connection
+        
+        # Check configuration
+        is_configured = supabase_config.is_configured()
+        
+        # Test connection
+        connection_success, connection_message = test_supabase_connection()
+        
+        # Get database info
+        database_url = supabase_config.get_database_url()
+        
+        result = f"""
+        <h2>🔍 Supabase Test Results</h2>
+        <div style="font-family: monospace; background: #f5f5f5; padding: 20px; border-radius: 8px;">
+            <p><strong>Configuration Status:</strong> {'✅ Configured' if is_configured else '❌ Not Configured'}</p>
+            <p><strong>Connection Test:</strong> {'✅' if connection_success else '❌'} {connection_message}</p>
+            <p><strong>Database URL:</strong> {database_url[:50]}...</p>
+            <p><strong>Supabase URL:</strong> {supabase_config.supabase_url or 'Not set'}</p>
+            <p><strong>Has Anon Key:</strong> {'✅ Yes' if supabase_config.supabase_key else '❌ No'}</p>
+            <p><strong>Has Service Key:</strong> {'✅ Yes' if supabase_config.supabase_service_key else '❌ No'}</p>
+        </div>
+        
+        <h3>📋 Setup Instructions</h3>
+        <p>If Supabase is not configured, follow these steps:</p>
+        <ol>
+            <li>Create a Supabase project at <a href="https://supabase.com" target="_blank">supabase.com</a></li>
+            <li>Get your project URL and API keys</li>
+            <li>Set environment variables in Vercel:
+                <ul>
+                    <li>SUPABASE_URL</li>
+                    <li>SUPABASE_ANON_KEY</li>
+                    <li>SUPABASE_SERVICE_ROLE_KEY</li>
+                    <li>SUPABASE_DATABASE_URL</li>
+                </ul>
+            </li>
+            <li>Redeploy your app</li>
+        </ol>
+        
+        <p><a href="/test/db">Test Database Connection</a> | <a href="/">Back to Home</a></p>
+        """
+        
+        return result
+        
+    except Exception as e:
+        return f"❌ Supabase test error: {str(e)}"
+
 @test_bp.route('/test/student-lectures')
 @login_required
 def test_student_lectures():

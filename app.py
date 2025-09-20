@@ -63,8 +63,9 @@ def create_app(config_name=None):
     
     # Initialize database tables and sample data
     with app.app_context():
-        from init_sample_data import init_sample_data
-        init_sample_data()
+        from init_supabase import create_supabase_tables, init_supabase_data
+        create_supabase_tables()
+        init_supabase_data()
     
     return app
 
