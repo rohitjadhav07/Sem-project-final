@@ -33,43 +33,92 @@ def test_db():
 def test_supabase():
     """Test Supabase connection and configuration"""
     try:
-        from supabase_config import supabase_config, SUPABASE_AVAILABLE
-        from init_supabase import test_supabase_connection
+        # Check environment variables directly
+        supabase_url = os.environ.get('SUPABASE_URL')
+        supabase_anon_key = os.environ.get('SUPABASE_ANON_KEY')
+        supabase_service_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+        supabase_db_url = os.environ.get('SUPABASE_DATABASE_URL')
         
-        # Check if Supabase dependencies are available
-        if not SUPABASE_AVAILABLE:
-            return f"""
-            <h2>⚠️ Supabase Dependencies Not Available</h2>
-            <div style="font-family: monospace; background: #fff3cd; padding: 20px; border-radius: 8px;">
-                <p><strong>Status:</strong> Supabase Python library not installed</p>
-                <p><strong>Current Database:</strong> Using SQLite fallback</p>
-                <p><strong>To Enable Supabase:</strong> Add dependencies to requirements.txt:</p>
-                <pre>psycopg2-binary==2.9.9
-supabase==2.3.4</pre>
-            </div>
-            <p><a href="/test/db">Test Current Database</a> | <a href="/">Back to Home</a></p>
-            """
+        # Check if Supabase is available
+        try:
+            import supabase
+            supabase_available = True
+        except ImportError:
+            supabase_available = False
         
-        # Check configuration
-        is_configured = supabase_config.is_configured()
-        
-        # Test connection
-        connection_success, connection_message = test_supabase_connection()
-        
-        # Get database info
-        database_url = supabase_config.get_database_url()
+        # Test database connection
+        database_status = "Unknown"
+        try:
+            from models.user import User
+            user_count = User.query.count()
+            database_status = f"Connected - {user_count} users found"
+        except Exception as db_error:
+            database_status = f"Error: {str(db_error)}"
         
         result = f"""
-        <h2>🔍 Supabase Test Results</h2>
-        <div style="font-family: monospace; background: #f5f5f5; padding: 20px; border-radius: 8px;">
-            <p><strong>Dependencies Available:</strong> {'✅ Yes' if SUPABASE_AVAILABLE else '❌ No'}</p>
-            <p><strong>Configuration Status:</strong> {'✅ Configured' if is_configured else '❌ Not Configured'}</p>
-            <p><strong>Connection Test:</strong> {'✅' if connection_success else '❌'} {connection_message}</p>
-            <p><strong>Database URL:</strong> {database_url[:50]}...</p>
-            <p><strong>Supabase URL:</strong> {supabase_config.supabase_url or 'Not set'}</p>
-            <p><strong>Has Anon Key:</strong> {'✅ Yes' if supabase_config.supabase_key else '❌ No'}</p>
-            <p><strong>Has Service Key:</strong> {'✅ Yes' if supabase_config.supabase_service_key else '❌ No'}</p>
-        </div>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Supabase Test - Geo Attendance Pro</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-4">
+                <h2>🔍 Supabase Configuration Test</h2>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-primary text-white">
+                                <h5>Environment Variables</h5>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>SUPABASE_URL:</strong> {'✅ Set' if supabase_url else '❌ Missing'}</p>
+                                <p><strong>SUPABASE_ANON_KEY:</strong> {'✅ Set' if supabase_anon_key else '❌ Missing'}</p>
+                                <p><strong>SUPABASE_SERVICE_ROLE_KEY:</strong> {'✅ Set' if supabase_service_key else '❌ Missing'}</p>
+                                <p><strong>SUPABASE_DATABASE_URL:</strong> {'✅ Set' if supabase_db_url else '❌ Missing'}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header bg-success text-white">
+                                <h5>System Status</h5>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>Supabase Library:</strong> {'✅ Available' if supabase_available else '❌ Not installed'}</p>
+                                <p><strong>Database Status:</strong> {database_status}</p>
+                                <p><strong>Current DB URL:</strong> {os.environ.get('SQLALCHEMY_DATABASE_URI', 'Not set')[:50]}...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <div class="alert alert-info">
+                        <h5>🚀 Setup Instructions</h5>
+                        <p>To connect to Supabase:</p>
+                        <ol>
+                            <li>Create a Supabase project at <a href="https://supabase.com" target="_blank">supabase.com</a></li>
+                            <li>Get your credentials from Settings → API and Settings → Database</li>
+                            <li>Set environment variables in Vercel</li>
+                            <li>Redeploy your app</li>
+                        </ol>
+                        <p><strong>Need help?</strong> Check the complete setup guide in your project files.</p>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <a href="/test/db" class="btn btn-primary">Test Database</a>
+                    <a href="/" class="btn btn-secondary">Back to Home</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return result
         
         <h3>📋 How to Get Supabase Credentials</h3>
         <div style="background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 10px 0;">

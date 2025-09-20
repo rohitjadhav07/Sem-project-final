@@ -70,13 +70,31 @@ def create_app(config_name=None):
     # Initialize database tables and sample data
     with app.app_context():
         try:
-            # Try to use the original sample data initialization
-            from init_sample_data import init_sample_data
-            init_sample_data()
-            print("✅ Database initialized with sample data")
+            # Check if we're using Supabase
+            database_url = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+            if 'postgresql://' in database_url:
+                print("🔄 Using Supabase PostgreSQL database")
+                # Try Supabase initialization
+                try:
+                    from init_supabase import create_supabase_tables, init_supabase_data
+                    create_supabase_tables()
+                    init_supabase_data()
+                    print("✅ Supabase database initialized")
+                except Exception as supabase_error:
+                    print(f"⚠️ Supabase initialization error: {supabase_error}")
+                    # Fallback to SQLAlchemy table creation
+                    db.create_all()
+                    print("✅ Database tables created via SQLAlchemy")
+            else:
+                print("🔄 Using SQLite database")
+                # Use original sample data initialization for SQLite
+                from init_sample_data import init_sample_data
+                init_sample_data()
+                print("✅ SQLite database initialized with sample data")
+                
         except Exception as e:
             print(f"⚠️ Database initialization error: {e}")
-            # Create basic tables at least
+            # Last resort: create basic tables
             try:
                 db.create_all()
                 print("✅ Basic database tables created")

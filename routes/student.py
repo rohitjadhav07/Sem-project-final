@@ -137,6 +137,7 @@ def course_detail(course_id):
 
 @student_bp.route('/active-lectures')
 @student_bp.route('/active-lectures')
+@student_bp.route('/active-lectures')
 @login_required
 @student_required
 def active_lectures():
