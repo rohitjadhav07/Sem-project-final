@@ -44,7 +44,7 @@ class Attendance(db.Model):
     def mark_present(self, latitude=None, longitude=None, distance=None, auto_marked=False):
         """Mark attendance as present"""
         self.status = 'present'
-        self.marked_at = datetime.utcnow()
+        self.marked_at = datetime.now(IST)
         self.student_latitude = latitude
         self.student_longitude = longitude
         self.distance_from_lecture = distance
@@ -62,13 +62,13 @@ class Attendance(db.Model):
         """Mark attendance as absent"""
         self.status = 'absent'
         self.notes = notes
-        self.marked_at = datetime.utcnow()
+        self.marked_at = datetime.now(IST)
     
     def mark_excused(self, notes=None):
         """Mark attendance as excused"""
         self.status = 'excused'
         self.notes = notes
-        self.marked_at = datetime.utcnow()
+        self.marked_at = datetime.now(IST)
     
     def is_valid_location(self):
         """Check if marked location is within geofence"""

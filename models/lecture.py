@@ -54,8 +54,8 @@ class Lecture(db.Model):
     attendance_window_end = db.Column(db.Integer, default=15)    # minutes after start
     auto_mark_attendance = db.Column(db.Boolean, default=True)
     
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(IST))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(IST), onupdate=lambda: datetime.now(IST))
     
     # Relationships
     attendances = db.relationship('Attendance', backref='lecture', lazy='dynamic',
@@ -126,7 +126,7 @@ class Lecture(db.Model):
         self.latitude = round(latitude, 8)  # Precision to ~1mm
         self.longitude = round(longitude, 8)
         self.location_accuracy = accuracy
-        self.location_set_at = datetime.utcnow()
+        self.location_set_at = datetime.now(IST)
         
         # Store metadata
         if metadata:

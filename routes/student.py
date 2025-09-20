@@ -37,8 +37,7 @@ def dashboard():
         .all()
     
     # Get active lectures count (for dashboard display)
-    from datetime import date
-    today = date.today()
+    today = datetime.now(IST).date()
     active_lectures_count = Lecture.query.join(Course).join(Enrollment)\
         .filter(
             Enrollment.student_id == current_user.id,
@@ -136,6 +135,7 @@ def course_detail(course_id):
                          attendances=attendances,
                          attendance_dict=attendance_dict)
 
+@student_bp.route('/active-lectures')
 @student_bp.route('/active-lectures')
 @login_required
 @student_required
