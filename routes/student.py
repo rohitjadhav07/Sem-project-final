@@ -644,8 +644,24 @@ def api_active_lectures():
                 }
             })
     
+    # Debug info
+    debug_info = []
+    for lecture in lectures:
+        debug_info.append({
+            'id': lecture.id,
+            'title': lecture.title,
+            'status': lecture.status,
+            'scheduled_start': lecture.scheduled_start.isoformat(),
+            'scheduled_end': lecture.scheduled_end.isoformat(),
+            'window_start': getattr(lecture, 'attendance_window_start', -15),
+            'window_end': getattr(lecture, 'attendance_window_end', 30),
+            'is_window_open': lecture.is_attendance_window_open(),
+            'current_time': datetime.now(IST).isoformat()
+        })
+    
     return jsonify({
         'success': True,
         'lectures': available_lectures,
-        'count': len(available_lectures)
+        'count': len(available_lectures),
+        'debug': debug_info  # Remove this in production
     })
