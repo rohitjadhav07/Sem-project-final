@@ -67,20 +67,23 @@ class ProductionConfig(Config):
     
     # If no URL provided, construct one from individual components
     if not database_url:
-        supabase_host = 'db.kkdnmzfcjckukxszfbgc.supabase.co'
+        # Use Supabase connection pooler for better reliability
+        supabase_project = 'kkdnmzfcjckukxszfbgc'
         supabase_password = 'Finalproject1234'
-        # Try connection pooling first (port 6543), then direct (port 5432)
-        database_url = f'postgresql://postgres:{supabase_password}@{supabase_host}:6543/postgres?pgbouncer=true&sslmode=require'
+        pooler_host = 'aws-0-ap-south-1.pooler.supabase.com'
+        database_url = f'postgresql://postgres.{supabase_project}:{supabase_password}@{pooler_host}:6543/postgres?pgbouncer=true&sslmode=require'
     
     # Handle Vercel's postgres:// URL format (convert to postgresql://)
     if database_url and database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     
-    # Add SSL and connection parameters if not already present
-    if database_url and '?' not in database_url:
-        database_url += '?sslmode=require'
-    elif database_url and 'sslmode' not in database_url:
-        database_url += '&sslmode=require'
+    # Clean up URL and add SSL parameters if not already present
+    if database_url:
+        database_url = database_url.strip()  # Remove any whitespace
+        if '?' not in database_url:
+            database_url += '?sslmode=require'
+        elif 'sslmode' not in database_url:
+            database_url += '&sslmode=require'
     
     SQLALCHEMY_DATABASE_URI = database_url
     
@@ -97,10 +100,7 @@ class ProductionConfig(Config):
         'connect_args': {
             'connect_timeout': 10,
             'application_name': 'geo_attendance_pro',
-            'sslmode': 'require',
-            'target_session_attrs': 'read-write',
-            # Force IPv4 to avoid IPv6 routing issues
-            'host': 'db.kkdnmzfcjckukxszfbgc.supabase.co'
+            'target_session_attrs': 'read-write'
         }
     }
     
@@ -141,20 +141,17 @@ class VercelConfig(ProductionConfig):
     """Vercel-specific configuration"""
     
     # Override database settings for Vercel
-    @property
-    def SQLALCHEMY_ENGINE_OPTIONS(self):
-        return {
-            'pool_pre_ping': True,
-            'pool_recycle': 300,
-            'pool_timeout': 30,
-            'max_overflow': 0,
-            'connect_args': {
-                'connect_timeout': 30,
-                'application_name': 'geo_attendance_vercel',
-                'sslmode': 'require',
-                'target_session_attrs': 'read-write'
-            }
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+        'pool_timeout': 30,
+        'max_overflow': 0,
+        'connect_args': {
+            'connect_timeout': 30,
+            'application_name': 'geo_attendance_vercel',
+            'target_session_attrs': 'read-write'
         }
+    }
     
     @classmethod
     def init_app(cls, app):
