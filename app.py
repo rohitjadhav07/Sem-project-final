@@ -4,6 +4,14 @@ import os
 from config import Config
 from extensions import db, login_manager, jwt
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("✅ Loaded environment variables from .env file")
+except ImportError:
+    print("⚠️ python-dotenv not installed, environment variables not loaded from .env file")
+
 def create_app(config_name=None):
     app = Flask(__name__)
     

@@ -43,7 +43,8 @@ class Config:
 class DevelopmentConfig(Config):
     """Development configuration"""
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DEV_DATABASE_URL') or \
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        os.environ.get('DEV_DATABASE_URL') or \
         'sqlite:///' + os.path.join(os.path.dirname(__file__), 'geo_attendance.db')
     
     # Relaxed security for development
@@ -60,9 +61,10 @@ class TestingConfig(Config):
 class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
-    # Use SQLite for production (reliable and works without external dependencies)
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'sqlite:////tmp/geo_attendance.db'
+    # Use Supabase PostgreSQL database with fallback to SQLite
+    SQLALCHEMY_DATABASE_URI = os.environ.get('SUPABASE_DATABASE_URL') or \
+                              os.environ.get('DATABASE_URL') or \
+                              'sqlite:////tmp/geo_attendance.db'
     
     # Enhanced security for production
     SESSION_COOKIE_SECURE = True
