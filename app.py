@@ -89,18 +89,27 @@ def create_app(config_name=None):
     # Initialize database tables and sample data
     with app.app_context():
         try:
+            # Test database connection first
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
+            print("✅ Database connection successful")
+            
             # Use original sample data initialization
             from init_sample_data import init_sample_data
             init_sample_data()
             print("✅ Database initialized with sample data")
         except Exception as e:
             print(f"⚠️ Database initialization error: {e}")
-            # Fallback: create basic tables
-            try:
-                db.create_all()
-                print("✅ Basic database tables created")
-            except Exception as table_error:
-                print(f"❌ Could not create tables: {table_error}")
+            # In production, don't fail if database is not available
+            if not app.config.get('DEBUG', False):
+                print("⚠️ Running in production mode without database initialization")
+            else:
+                # Fallback: create basic tables
+                try:
+                    db.create_all()
+                    print("✅ Basic database tables created")
+                except Exception as table_error:
+                    print(f"❌ Could not create tables: {table_error}")
     
     return app
 

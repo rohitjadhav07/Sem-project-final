@@ -63,16 +63,24 @@ class ProductionConfig(Config):
     DEBUG = False
     
     # Use Supabase PostgreSQL database with multiple fallback options
-    database_url = (
-        os.environ.get('DATABASE_URL') or 
-        os.environ.get('SUPABASE_DATABASE_URL') or
-        # Fallback to direct connection if pooled connection fails
-        'postgresql://postgres:Finalproject1234@db.kkdnmzfcjckukxszfbgc.supabase.co:5432/postgres'
-    )
+    database_url = os.environ.get('DATABASE_URL') or os.environ.get('SUPABASE_DATABASE_URL')
+    
+    # If no URL provided, construct one from individual components
+    if not database_url:
+        supabase_host = 'db.kkdnmzfcjckukxszfbgc.supabase.co'
+        supabase_password = 'Finalproject1234'
+        # Try connection pooling first (port 6543), then direct (port 5432)
+        database_url = f'postgresql://postgres:{supabase_password}@{supabase_host}:6543/postgres?pgbouncer=true&sslmode=require'
     
     # Handle Vercel's postgres:// URL format (convert to postgresql://)
     if database_url and database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    
+    # Add SSL and connection parameters if not already present
+    if database_url and '?' not in database_url:
+        database_url += '?sslmode=require'
+    elif database_url and 'sslmode' not in database_url:
+        database_url += '&sslmode=require'
     
     SQLALCHEMY_DATABASE_URI = database_url
     
@@ -89,7 +97,10 @@ class ProductionConfig(Config):
         'connect_args': {
             'connect_timeout': 10,
             'application_name': 'geo_attendance_pro',
-            'sslmode': 'require'
+            'sslmode': 'require',
+            'target_session_attrs': 'read-write',
+            # Force IPv4 to avoid IPv6 routing issues
+            'host': 'db.kkdnmzfcjckukxszfbgc.supabase.co'
         }
     }
     
@@ -126,6 +137,36 @@ class HerokuConfig(ProductionConfig):
         file_handler.setLevel(logging.INFO)
         app.logger.addHandler(file_handler)
 
+class VercelConfig(ProductionConfig):
+    """Vercel-specific configuration"""
+    
+    # Override database settings for Vercel
+    @property
+    def SQLALCHEMY_ENGINE_OPTIONS(self):
+        return {
+            'pool_pre_ping': True,
+            'pool_recycle': 300,
+            'pool_timeout': 30,
+            'max_overflow': 0,
+            'connect_args': {
+                'connect_timeout': 30,
+                'application_name': 'geo_attendance_vercel',
+                'sslmode': 'require',
+                'target_session_attrs': 'read-write'
+            }
+        }
+    
+    @classmethod
+    def init_app(cls, app):
+        ProductionConfig.init_app(app)
+        
+        # Vercel-specific logging
+        import logging
+        from logging import StreamHandler
+        file_handler = StreamHandler()
+        file_handler.setLevel(logging.INFO)
+        app.logger.addHandler(file_handler)
+
 class DockerConfig(ProductionConfig):
     """Docker-specific configuration"""
     
@@ -144,6 +185,7 @@ config = {
     'development': DevelopmentConfig,
     'testing': TestingConfig,
     'production': ProductionConfig,
+    'vercel': VercelConfig,
     'heroku': HerokuConfig,
     'docker': DockerConfig,
     'default': DevelopmentConfig
