@@ -64,9 +64,14 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5><i class="fas fa-broadcast-tower"></i> Active Lectures</h5>
-                <button class="btn btn-sm btn-outline-primary" onclick="refreshLectures()">
-                    <i class="fas fa-sync-alt"></i> Refresh
-                </button>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary me-2" onclick="refreshLectures()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <a href="{{ url_for('student.active_lectures') }}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-eye"></i> View All
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 <div id="activeLectures">
@@ -82,26 +87,7 @@
     </div>
 </div>
 
-<!-- Active Lectures -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5><i class="fas fa-broadcast-tower"></i> Active Lectures</h5>
-                <a href="{{ url_for('student.active_lectures') }}" class="btn btn-sm btn-primary">
-                    <i class="fas fa-eye"></i> View All
-                </a>
-            </div>
-            <div class="card-body">
-                <div id="activeLectures">
-                    <div class="text-center">
-                        <i class="fas fa-spinner fa-spin"></i> Loading active lectures...
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <!-- Recent Attendance -->
 <div class="row mt-4">
@@ -209,23 +195,52 @@ function displayLectures(lectures) {
     
     let html = '<div class="row">';
     lectures.forEach(lecture => {
-        const startTime = new Date(lecture.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const endTime = new Date(lecture.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        // Convert UTC times to local device time
+        const startTime = new Date(lecture.start_time + 'Z').toLocaleTimeString([], {
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true
+        });
+        const endTime = new Date(lecture.end_time + 'Z').toLocaleTimeString([], {
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: true
+        });
+        
+        // Check if lecture is currently active
+        const now = new Date();
+        const lectureStart = new Date(lecture.start_time + 'Z');
+        const lectureEnd = new Date(lecture.end_time + 'Z');
+        const isActive = now >= lectureStart && now <= lectureEnd;
+        const isUpcoming = now < lectureStart;
+        
+        const statusBadge = isActive ? 
+            '<span class="badge bg-success ms-2">Live Now</span>' : 
+            isUpcoming ? '<span class="badge bg-warning ms-2">Upcoming</span>' : 
+            '<span class="badge bg-secondary ms-2">Ended</span>';
         
         html += `
             <div class="col-md-6 mb-3">
-                <div class="card border-success">
+                <div class="card ${isActive ? 'border-success' : isUpcoming ? 'border-warning' : 'border-secondary'}">
                     <div class="card-body">
-                        <h6 class="card-title">${lecture.title}</h6>
+                        <h6 class="card-title">
+                            ${lecture.title}
+                            ${statusBadge}
+                        </h6>
                         <p class="card-text text-muted">${lecture.course_code} - ${lecture.course_name}</p>
                         <p class="small text-muted">
                             <i class="fas fa-clock"></i> ${startTime} - ${endTime}
                         </p>
-                        ${lecture.location.name ? `<p class="small text-muted"><i class="fas fa-map-marker-alt"></i> ${lecture.location.name}</p>` : ''}
+                        ${lecture.location && lecture.location.name ? `<p class="small text-muted"><i class="fas fa-map-marker-alt"></i> ${lecture.location.name}</p>` : ''}
                         <div class="d-grid gap-2">
-                            <a href="/student/lecture/${lecture.id}/enhanced-checkin" class="btn btn-success btn-sm">
-                                <i class="fas fa-shield-alt"></i> Secure Check-in
-                            </a>
+                            ${isActive ? 
+                                `<a href="/student/lecture/${lecture.id}/enhanced-checkin" class="btn btn-success btn-sm">
+                                    <i class="fas fa-shield-alt"></i> Check In Now
+                                </a>` :
+                                `<button class="btn btn-outline-secondary btn-sm" disabled>
+                                    <i class="fas fa-clock"></i> ${isUpcoming ? 'Not Started' : 'Ended'}
+                                </button>`
+                            }
                         </div>
                     </div>
                 </div>
