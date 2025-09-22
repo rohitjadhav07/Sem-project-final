@@ -62,13 +62,19 @@ class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     # Use Supabase PostgreSQL database with fallback to SQLite
-    SQLALCHEMY_DATABASE_URI = os.environ.get('SUPABASE_DATABASE_URL') or \
-                              os.environ.get('DATABASE_URL') or \
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+                              os.environ.get('SUPABASE_DATABASE_URL') or \
                               'sqlite:////tmp/geo_attendance.db'
     
     # Enhanced security for production
-    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = False  # Set to True only if using HTTPS
     WTF_CSRF_ENABLED = True
+    
+    # Database settings
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
     
     # Logging
     LOG_TO_STDOUT = os.environ.get('LOG_TO_STDOUT')

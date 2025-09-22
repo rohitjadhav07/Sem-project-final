@@ -26,3 +26,22 @@ def about():
 def contact():
     """Contact page"""
     return render_template('contact.html')
+
+@main_bp.route('/health')
+def health_check():
+    """Health check endpoint for deployment"""
+    try:
+        from extensions import db
+        # Test database connection
+        db.session.execute('SELECT 1')
+        return {
+            'status': 'healthy',
+            'database': 'connected',
+            'message': 'Geo Attendance Pro is running'
+        }, 200
+    except Exception as e:
+        return {
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e)
+        }, 500
