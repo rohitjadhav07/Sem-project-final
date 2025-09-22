@@ -42,17 +42,55 @@ def health_check():
     try:
         from extensions import db
         from sqlalchemy import text
+        from flask import current_app
+        
         # Test database connection
         result = db.session.execute(text('SELECT 1'))
         db.session.commit()
+        
+        # Get database URL for debugging (hide password)
+        db_url = current_app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')
+        if db_url and '@' in db_url:
+            # Hide password in URL for security
+            parts = db_url.split('@')
+            if len(parts) > 1:
+                user_pass = parts[0].split('//')[-1]
+                if ':' in user_pass:
+                    user = user_pass.split(':')[0]
+                    db_url_safe = f"postgresql://{user}:***@{parts[1]}"
+                else:
+                    db_url_safe = db_url
+            else:
+                db_url_safe = db_url
+        else:
+            db_url_safe = db_url
+            
         return {
             'status': 'healthy',
             'database': 'connected',
+            'database_url': db_url_safe,
             'message': 'Geo Attendance Pro is running'
         }, 200
     except Exception as e:
+        from flask import current_app
+        db_url = current_app.config.get('SQLALCHEMY_DATABASE_URI', 'Not set')
+        if db_url and '@' in db_url:
+            parts = db_url.split('@')
+            if len(parts) > 1:
+                user_pass = parts[0].split('//')[-1]
+                if ':' in user_pass:
+                    user = user_pass.split(':')[0]
+                    db_url_safe = f"postgresql://{user}:***@{parts[1]}"
+                else:
+                    db_url_safe = db_url
+            else:
+                db_url_safe = db_url
+        else:
+            db_url_safe = db_url
+            
         return {
             'status': 'unhealthy',
             'database': 'disconnected',
+            'database_url': db_url_safe,
             'error': str(e)
         }, 500

@@ -62,14 +62,19 @@ class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     
-    # Use Supabase PostgreSQL database with fallback to SQLite
-    database_url = os.environ.get('DATABASE_URL') or os.environ.get('SUPABASE_DATABASE_URL')
+    # Use Supabase PostgreSQL database with multiple fallback options
+    database_url = (
+        os.environ.get('DATABASE_URL') or 
+        os.environ.get('SUPABASE_DATABASE_URL') or
+        # Fallback to direct connection if pooled connection fails
+        'postgresql://postgres:Finalproject1234@db.kkdnmzfcjckukxszfbgc.supabase.co:5432/postgres'
+    )
     
     # Handle Vercel's postgres:// URL format (convert to postgresql://)
     if database_url and database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     
-    SQLALCHEMY_DATABASE_URI = database_url or 'sqlite:////tmp/geo_attendance.db'
+    SQLALCHEMY_DATABASE_URI = database_url
     
     # Enhanced security for production
     SESSION_COOKIE_SECURE = False  # Set to True only if using HTTPS
