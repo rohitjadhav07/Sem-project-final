@@ -6,16 +6,25 @@ main_bp = Blueprint('main', __name__)
 @main_bp.route('/')
 def index():
     """Main landing page"""
-    if current_user.is_authenticated:
-        # Redirect to appropriate dashboard based on role
-        if current_user.role == 'admin':
-            return redirect(url_for('admin.dashboard'))
-        elif current_user.role == 'teacher':
-            return redirect(url_for('teacher.dashboard'))
-        elif current_user.role == 'student':
-            return redirect(url_for('student.dashboard'))
-    
-    return render_template('index.html')
+    try:
+        if current_user.is_authenticated:
+            # Redirect to appropriate dashboard based on role
+            if current_user.role == 'admin':
+                return redirect(url_for('admin.dashboard'))
+            elif current_user.role == 'teacher':
+                return redirect(url_for('teacher.dashboard'))
+            elif current_user.role == 'student':
+                return redirect(url_for('student.dashboard'))
+        
+        return render_template('index.html')
+    except Exception as e:
+        # Return a simple error page for debugging
+        return f"""
+        <h1>Geo Attendance Pro</h1>
+        <p>Application is starting up...</p>
+        <p>Error: {str(e)}</p>
+        <p><a href="/health">Check Health Status</a></p>
+        """, 500
 
 @main_bp.route('/about')
 def about():
