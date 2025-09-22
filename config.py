@@ -61,19 +61,31 @@ class TestingConfig(Config):
 class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
+    
     # Use Supabase PostgreSQL database with fallback to SQLite
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-                              os.environ.get('SUPABASE_DATABASE_URL') or \
-                              'sqlite:////tmp/geo_attendance.db'
+    database_url = os.environ.get('DATABASE_URL') or os.environ.get('SUPABASE_DATABASE_URL')
+    
+    # Handle Vercel's postgres:// URL format (convert to postgresql://)
+    if database_url and database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    
+    SQLALCHEMY_DATABASE_URI = database_url or 'sqlite:////tmp/geo_attendance.db'
     
     # Enhanced security for production
     SESSION_COOKIE_SECURE = False  # Set to True only if using HTTPS
     WTF_CSRF_ENABLED = True
     
-    # Database settings
+    # Database settings for better connection handling
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
+        'pool_timeout': 20,
+        'max_overflow': 0,
+        'connect_args': {
+            'connect_timeout': 10,
+            'application_name': 'geo_attendance_pro',
+            'sslmode': 'require'
+        }
     }
     
     # Logging

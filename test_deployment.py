@@ -46,7 +46,8 @@ def test_deployment():
         # Test database connection
         with app.app_context():
             from extensions import db
-            db.session.execute('SELECT 1')
+            from sqlalchemy import text
+            db.session.execute(text('SELECT 1'))
             print("✅ Database connection successful")
             
         return True

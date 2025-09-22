@@ -41,8 +41,10 @@ def health_check():
     """Health check endpoint for deployment"""
     try:
         from extensions import db
+        from sqlalchemy import text
         # Test database connection
-        db.session.execute('SELECT 1')
+        result = db.session.execute(text('SELECT 1'))
+        db.session.commit()
         return {
             'status': 'healthy',
             'database': 'connected',
