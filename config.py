@@ -71,7 +71,8 @@ class ProductionConfig(Config):
         supabase_project = 'kkdnmzfcjckukxszfbgc'
         supabase_password = 'Finalproject1234'
         pooler_host = 'aws-0-ap-south-1.pooler.supabase.com'
-        database_url = f'postgresql://postgres.{supabase_project}:{supabase_password}@{pooler_host}:6543/postgres?pgbouncer=true&sslmode=require'
+        # For pooler, use format: postgres:[password]@host:port/postgres
+        database_url = f'postgresql://postgres:{supabase_password}@{pooler_host}:6543/postgres'
     
     # Handle Vercel's postgres:// URL format (convert to postgresql://)
     if database_url and database_url.startswith('postgres://'):
