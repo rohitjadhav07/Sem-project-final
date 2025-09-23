@@ -70,9 +70,15 @@ class ProductionConfig(Config):
         # Use Supabase connection pooler for better reliability
         supabase_project = 'kkdnmzfcjckukxszfbgc'
         supabase_password = 'Finalproject1234'
-        pooler_host = 'aws-1-ap-south-1.pooler.supabase.com'
-        # For pooler, use format: postgres.project_id:password@host:port/postgres
-        database_url = f'postgresql://postgres.{supabase_project}:{supabase_password}@{pooler_host}:5432/postgres'
+        
+        # Try multiple pooler endpoints for better reliability
+        pooler_endpoints = [
+            f'postgresql://postgres.{supabase_project}:{supabase_password}@aws-1-ap-south-1.pooler.supabase.com:5432/postgres',
+            f'postgresql://postgres.{supabase_project}:{supabase_password}@aws-1-ap-south-1.pooler.supabase.com:6543/postgres',
+        ]
+        
+        # Use the first endpoint as default
+        database_url = pooler_endpoints[0]
     
     # Handle Vercel's postgres:// URL format (convert to postgresql://)
     if database_url and database_url.startswith('postgres://'):
@@ -96,12 +102,16 @@ class ProductionConfig(Config):
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'pool_timeout': 20,
-        'max_overflow': 0,
+        'pool_timeout': 30,
+        'max_overflow': 5,
+        'pool_size': 10,
         'connect_args': {
-            'connect_timeout': 10,
+            'connect_timeout': 30,
             'application_name': 'geo_attendance_pro',
-            'target_session_attrs': 'read-write'
+            'target_session_attrs': 'read-write',
+            'keepalives_idle': 600,
+            'keepalives_interval': 30,
+            'keepalives_count': 3
         }
     }
     
@@ -145,12 +155,16 @@ class VercelConfig(ProductionConfig):
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
         'pool_recycle': 300,
-        'pool_timeout': 30,
-        'max_overflow': 0,
+        'pool_timeout': 60,
+        'max_overflow': 10,
+        'pool_size': 5,
         'connect_args': {
-            'connect_timeout': 30,
+            'connect_timeout': 60,
             'application_name': 'geo_attendance_vercel',
-            'target_session_attrs': 'read-write'
+            'target_session_attrs': 'read-write',
+            'keepalives_idle': 600,
+            'keepalives_interval': 30,
+            'keepalives_count': 3
         }
     }
     

@@ -69,8 +69,17 @@ class Lecture(db.Model):
         window_start_minutes = getattr(self, 'attendance_window_start', -30)  # 30 minutes before
         window_end_minutes = getattr(self, 'attendance_window_end', 60)       # 60 minutes after start
         
-        start_window = self.scheduled_start + timedelta(minutes=window_start_minutes)
-        end_window = self.scheduled_start + timedelta(minutes=window_end_minutes)
+        # Handle timezone-aware vs timezone-naive datetime comparison
+        scheduled_start = self.scheduled_start
+        if scheduled_start.tzinfo is None:
+            # If stored datetime is naive, assume it's in IST
+            scheduled_start = scheduled_start.replace(tzinfo=IST)
+        elif now.tzinfo is None:
+            # If current time is naive, make it timezone-aware
+            now = now.replace(tzinfo=IST)
+        
+        start_window = scheduled_start + timedelta(minutes=window_start_minutes)
+        end_window = scheduled_start + timedelta(minutes=window_end_minutes)
         
         return start_window <= now <= end_window
     

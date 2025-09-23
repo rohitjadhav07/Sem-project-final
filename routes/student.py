@@ -136,8 +136,8 @@ def course_detail(course_id):
                          attendance_dict=attendance_dict)
 
 @student_bp.route('/active-lectures')
-@student_bp.route('/active-lectures')
-@student_bp.route('/active-lectures')
+# @student_bp.route('/active-lectures')
+# @student_bp.route('/active-lectures')
 @login_required
 @student_required
 def active_lectures():
@@ -546,46 +546,59 @@ def enhanced_checkin(lecture_id):
 @student_required
 def debug_lectures():
     """Debug route to check lecture availability"""
-    from datetime import datetime
-    
-    # Get all lectures for enrolled courses
-    all_lectures = Lecture.query.join(Course).join(Enrollment)\
-        .filter(
-            Enrollment.student_id == current_user.id,
-            Enrollment.is_active == True
-        )\
-        .order_by(Lecture.scheduled_start)\
-        .all()
-    
-    debug_info = []
-    for lecture in all_lectures:
-        # Check attendance window
-        now = datetime.now()
-        start_window = lecture.scheduled_start + timedelta(minutes=lecture.attendance_window_start)
-        end_window = lecture.scheduled_start + timedelta(minutes=lecture.attendance_window_end)
-        window_open = start_window <= now <= end_window
+    try:
+        from datetime import datetime
         
-        # Check if attendance already marked
-        existing_attendance = Attendance.query.filter_by(
+        # Get enrollments
+        enrollments = Enrollment.query.filter_by(
             student_id=current_user.id,
-            lecture_id=lecture.id
-        ).first()
+            is_active=True
+        ).all()
         
-        debug_info.append({
-            'id': lecture.id,
-            'title': lecture.title,
-            'course': lecture.course.code,
-            'status': lecture.status,
-            'is_active': lecture.is_active,
-            'scheduled_start': lecture.scheduled_start,
-            'window_start': start_window,
-            'window_end': end_window,
-            'window_open': window_open,
-            'attendance_marked': existing_attendance is not None,
-            'current_time': now
-        })
-    
-    return f"<pre>{debug_info}</pre>"
+        # Get all lectures
+        all_lectures = Lecture.query.filter_by(is_active=True).all()
+        
+        # Get lectures for enrolled courses
+        enrolled_course_ids = [e.course_id for e in enrollments]
+        enrolled_lectures = [l for l in all_lectures if l.course_id in enrolled_course_ids]
+        
+        debug_info = {
+            'student_id': current_user.id,
+            'enrollments_count': len(enrollments),
+            'enrolled_courses': [{'id': e.course_id, 'name': e.course.name} for e in enrollments],
+            'total_lectures': len(all_lectures),
+            'enrolled_lectures_count': len(enrolled_lectures),
+            'current_time': datetime.now(IST).isoformat(),
+            'lectures': []
+        }
+        
+        for lecture in enrolled_lectures:
+            # Check attendance window
+            window_open = lecture.is_attendance_window_open()
+            
+            # Check if attendance already marked
+            existing_attendance = Attendance.query.filter_by(
+                student_id=current_user.id,
+                lecture_id=lecture.id
+            ).first()
+            
+            debug_info['lectures'].append({
+                'id': lecture.id,
+                'title': lecture.title,
+                'course': lecture.course.code,
+                'status': lecture.status,
+                'is_active': lecture.is_active,
+                'scheduled_start': lecture.scheduled_start.isoformat(),
+                'scheduled_end': lecture.scheduled_end.isoformat(),
+                'window_open': window_open,
+                'attendance_marked': existing_attendance is not None,
+                'has_location': bool(lecture.latitude and lecture.longitude)
+            })
+        
+        return f"<pre>{debug_info}</pre>"
+        
+    except Exception as e:
+        return f"<pre>Error: {str(e)}</pre>"
 
 @student_bp.route('/lectures/active')
 @login_required
@@ -599,14 +612,32 @@ def lectures_active():
 @student_required
 def api_active_lectures():
     """API endpoint to get active lectures for AJAX calls"""
-    from datetime import datetime, date
-    
-    # Get lectures for enrolled courses that are scheduled for today or currently active
-    today = datetime.now(IST).date()
-    lectures = Lecture.query.join(Course).join(Enrollment)\
-        .filter(
-            Enrollment.student_id == current_user.id,
-            Enrollment.is_active == True,
+    try:
+        from datetime import datetime, date
+        
+        # Get current time
+        current_time = datetime.now(IST)
+        today = current_time.date()
+        
+        # Get all lectures for enrolled courses (simplified query)
+        enrollments = Enrollment.query.filter_by(
+            student_id=current_user.id,
+            is_active=True
+        ).all()
+        
+        enrolled_course_ids = [e.course_id for e in enrollments]
+        
+        if not enrolled_course_ids:
+            return jsonify({
+                'success': True,
+                'lectures': [],
+                'count': 0,
+                'message': 'No enrolled courses found'
+            })
+        
+        # Get lectures for today and active lectures
+        lectures = Lecture.query.filter(
+            Lecture.course_id.in_(enrolled_course_ids),
             Lecture.is_active == True,
             db.or_(
                 Lecture.status == 'active',
@@ -615,53 +646,66 @@ def api_active_lectures():
                     db.func.date(Lecture.scheduled_start) == today
                 )
             )
-        )\
-        .order_by(Lecture.scheduled_start)\
-        .all()
-    
-    # Filter lectures where attendance window is open
-    available_lectures = []
-    for lecture in lectures:
-        # Check if attendance already marked
-        existing_attendance = Attendance.query.filter_by(
-            student_id=current_user.id,
-            lecture_id=lecture.id
-        ).first()
+        ).order_by(Lecture.scheduled_start).all()
         
-        if not existing_attendance and lecture.is_attendance_window_open():
-            available_lectures.append({
+        # Process lectures
+        available_lectures = []
+        debug_info = []
+        
+        for lecture in lectures:
+            # Check if attendance already marked
+            existing_attendance = Attendance.query.filter_by(
+                student_id=current_user.id,
+                lecture_id=lecture.id
+            ).first()
+            
+            # Check attendance window
+            window_open = lecture.is_attendance_window_open()
+            
+            # Add to debug info
+            debug_info.append({
                 'id': lecture.id,
                 'title': lecture.title,
-                'course_code': lecture.course.code,
-                'course_name': lecture.course.name,
-                'start_time': lecture.scheduled_start.isoformat(),
-                'end_time': lecture.scheduled_end.isoformat(),
-                'location': {
-                    'latitude': lecture.latitude,
-                    'longitude': lecture.longitude,
-                    'radius': lecture.geofence_radius,
-                    'name': lecture.location_name
-                }
+                'status': lecture.status,
+                'scheduled_start': lecture.scheduled_start.isoformat(),
+                'scheduled_end': lecture.scheduled_end.isoformat(),
+                'window_start': getattr(lecture, 'attendance_window_start', -30),
+                'window_end': getattr(lecture, 'attendance_window_end', 60),
+                'is_window_open': window_open,
+                'attendance_marked': existing_attendance is not None,
+                'current_time': current_time.isoformat()
             })
-    
-    # Debug info
-    debug_info = []
-    for lecture in lectures:
-        debug_info.append({
-            'id': lecture.id,
-            'title': lecture.title,
-            'status': lecture.status,
-            'scheduled_start': lecture.scheduled_start.isoformat(),
-            'scheduled_end': lecture.scheduled_end.isoformat(),
-            'window_start': getattr(lecture, 'attendance_window_start', -15),
-            'window_end': getattr(lecture, 'attendance_window_end', 30),
-            'is_window_open': lecture.is_attendance_window_open(),
-            'current_time': datetime.now(IST).isoformat()
+            
+            # Add to available lectures if window is open and no attendance marked
+            if not existing_attendance and window_open:
+                available_lectures.append({
+                    'id': lecture.id,
+                    'title': lecture.title,
+                    'course_code': lecture.course.code,
+                    'course_name': lecture.course.name,
+                    'start_time': lecture.scheduled_start.isoformat(),
+                    'end_time': lecture.scheduled_end.isoformat(),
+                    'location': {
+                        'latitude': lecture.latitude,
+                        'longitude': lecture.longitude,
+                        'radius': lecture.geofence_radius,
+                        'name': lecture.location_name
+                    }
+                })
+        
+        return jsonify({
+            'success': True,
+            'lectures': available_lectures,
+            'count': len(available_lectures),
+            'total_lectures': len(lectures),
+            'debug': debug_info,
+            'enrolled_courses': len(enrolled_course_ids)
         })
-    
-    return jsonify({
-        'success': True,
-        'lectures': available_lectures,
-        'count': len(available_lectures),
-        'debug': debug_info  # Remove this in production
-    })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'lectures': [],
+            'count': 0
+        })

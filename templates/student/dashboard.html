@@ -172,16 +172,37 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function refreshLectures() {
+    console.log('Fetching active lectures...');
+    
     fetch('/student/api/active-lectures')
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
+        console.log('API Response:', data);
+        
         if (data.success) {
             document.getElementById('activeLecturesCount').textContent = data.count;
             displayLectures(data.lectures || []);
+            
+            // Show debug info in console
+            if (data.debug) {
+                console.log('Debug info:', data.debug);
+            }
+        } else {
+            console.error('API returned error:', data.error);
+            const container = document.getElementById('activeLectures');
+            container.innerHTML = `<div class="alert alert-danger">Error loading lectures: ${data.error}</div>`;
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        console.error('Fetch error:', error);
+        const container = document.getElementById('activeLectures');
+        container.innerHTML = `<div class="alert alert-danger">Failed to load lectures. Please try again.</div>`;
     });
 }
 

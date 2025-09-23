@@ -88,28 +88,37 @@ def create_app(config_name=None):
     
     # Initialize database tables and sample data
     with app.app_context():
-        try:
-            # Test database connection first
-            from sqlalchemy import text
-            db.session.execute(text('SELECT 1'))
-            print("✅ Database connection successful")
-            
-            # Use original sample data initialization
-            from init_sample_data import init_sample_data
-            init_sample_data()
-            print("✅ Database initialized with sample data")
-        except Exception as e:
-            print(f"⚠️ Database initialization error: {e}")
-            # In production, don't fail if database is not available
-            if not app.config.get('DEBUG', False):
-                print("⚠️ Running in production mode without database initialization")
-            else:
-                # Fallback: create basic tables
-                try:
-                    db.create_all()
-                    print("✅ Basic database tables created")
-                except Exception as table_error:
-                    print(f"❌ Could not create tables: {table_error}")
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                # Test database connection first
+                from sqlalchemy import text
+                db.session.execute(text('SELECT 1'))
+                print("✅ Database connection successful")
+                
+                # Use original sample data initialization
+                from init_sample_data import init_sample_data
+                init_sample_data()
+                print("✅ Database initialized with sample data")
+                break  # Success, exit retry loop
+                
+            except Exception as e:
+                retry_count += 1
+                print(f"⚠️ Database connection attempt {retry_count}/{max_retries} failed: {e}")
+                
+                if retry_count >= max_retries:
+                    print("❌ Max retries reached. Running without database initialization.")
+                    # In production, continue without database initialization
+                    if not app.config.get('DEBUG', False):
+                        print("⚠️ Running in production mode without database initialization")
+                        break
+                    else:
+                        print("❌ Development mode: Database connection required")
+                else:
+                    import time
+                    time.sleep(2)  # Wait 2 seconds before retry
     
     return app
 
