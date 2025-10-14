@@ -68,9 +68,7 @@
                     <button class="btn btn-sm btn-outline-primary me-2" onclick="refreshLectures()">
                         <i class="fas fa-sync-alt"></i> Refresh
                     </button>
-                    <button class="btn btn-sm btn-outline-success me-2" onclick="testLocationAccess()" title="Test location access">
-                        <i class="fas fa-map-marker-alt"></i> Test Location
-                    </button>
+
                     <a href="{{ url_for('student.active_lectures') }}" class="btn btn-sm btn-primary">
                         <i class="fas fa-eye"></i> View All
                     </a>
@@ -144,142 +142,43 @@
     </div>
 </div>
 
-<!-- Location Permission Help Modal -->
-<div class="modal fade" id="locationPermissionModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">📍 Enable Location Access</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info">
-                    <strong>🎯 Automatic attendance requires location access</strong><br>
-                    We'll automatically mark your attendance when you're near a lecture location.
-                </div>
-                
-                <h6>How to enable location access:</h6>
-                
-                <div class="accordion" id="locationHelp">
-                    <div class="accordion-item">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#chrome-help">
-                                Chrome / Edge
-                            </button>
-                        </h2>
-                        <div id="chrome-help" class="accordion-collapse collapse show" data-bs-parent="#locationHelp">
-                            <div class="accordion-body">
-                                <ol>
-                                    <li>Click the <strong>🔒 lock icon</strong> in the address bar</li>
-                                    <li>Set <strong>"Location"</strong> to <strong>"Allow"</strong></li>
-                                    <li>Refresh the page</li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="accordion-item">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#firefox-help">
-                                Firefox
-                            </button>
-                        </h2>
-                        <div id="firefox-help" class="accordion-collapse collapse" data-bs-parent="#locationHelp">
-                            <div class="accordion-body">
-                                <ol>
-                                    <li>Click the <strong>🛡️ shield icon</strong> in the address bar</li>
-                                    <li>Click <strong>"Allow Location Access"</strong></li>
-                                    <li>Refresh the page</li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="accordion-item">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#mobile-help">
-                                Mobile Browsers
-                            </button>
-                        </h2>
-                        <div id="mobile-help" class="accordion-collapse collapse" data-bs-parent="#locationHelp">
-                            <div class="accordion-body">
-                                <ol>
-                                    <li>Go to your browser settings</li>
-                                    <li>Find <strong>"Site permissions"</strong> or <strong>"Location"</strong></li>
-                                    <li>Allow location for this website</li>
-                                    <li>Refresh the page</li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="alert alert-warning mt-3">
-                    <strong>Still not working?</strong><br>
-                    • Make sure you're not in incognito/private mode<br>
-                    • Try refreshing the page<br>
-                    • Move to an area with better GPS signal
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" onclick="requestLocationPermission()">
-                    <i class="fas fa-redo"></i> Try Again
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-let currentLecture = null;
-let userLocation = null;
+// Simple automatic attendance system
+let currentUserLocation = null;
+let activeLectures = [];
+let checkedInLectures = new Set();
 
-// Load active lectures on page load and start auto check-in
+// Start everything when page loads
 document.addEventListener('DOMContentLoaded', function() {
-    // Check if we're on HTTPS (required for location in production)
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        showLocationStatus('⚠️ Location services require HTTPS in production. Some features may not work.', 'error');
-    }
+    console.log('🚀 Starting simple automatic attendance...');
     
+    // Get lectures and start location tracking
     refreshLectures();
-    startAutoCheckIn();
+    startLocationTracking();
+    
+    // Update every 5 seconds
+    setInterval(() => {
+        refreshLectures();
+        updateLocationAndDistance();
+    }, 5000);
 });
 
 function refreshLectures() {
-    console.log('Fetching active lectures...');
-    
     fetch('/student/api/active-lectures')
-    .then(response => {
-        console.log('Response status:', response.status);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
-        console.log('API Response:', data);
-        
         if (data.success) {
+            activeLectures = data.lectures || [];
             document.getElementById('activeLecturesCount').textContent = data.count;
-            displayLectures(data.lectures || []);
-            
-            // Show debug info in console
-            if (data.debug) {
-                console.log('Debug info:', data.debug);
-            }
-        } else {
-            console.error('API returned error:', data.error);
-            const container = document.getElementById('activeLectures');
-            container.innerHTML = `<div class="alert alert-danger">Error loading lectures: ${data.error}</div>`;
+            displayLectures(activeLectures);
         }
     })
     .catch(error => {
-        console.error('Fetch error:', error);
-        const container = document.getElementById('activeLectures');
-        container.innerHTML = `<div class="alert alert-danger">Failed to load lectures. Please try again.</div>`;
+        console.error('Error loading lectures:', error);
     });
 }
 
@@ -287,59 +186,294 @@ function displayLectures(lectures) {
     const container = document.getElementById('activeLectures');
     
     if (lectures.length === 0) {
-        container.innerHTML = '<div class="alert alert-info text-center"><i class="fas fa-info-circle"></i> No active lectures available for check-in at the moment.</div>';
+        container.innerHTML = '<div class="alert alert-info text-center">No active lectures at the moment.</div>';
         return;
     }
     
     let html = '<div class="row">';
     lectures.forEach(lecture => {
-        // Parse timezone-aware times properly
-        const startTime = new Date(lecture.start_time).toLocaleTimeString([], {
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: true
-        });
-        const endTime = new Date(lecture.end_time).toLocaleTimeString([], {
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: true
-        });
+        const startTime = new Date(lecture.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true});
+        const endTime = new Date(lecture.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true});
         
-        // Check if lecture is currently active
-        const now = new Date();
-        const lectureStart = new Date(lecture.start_time);
-        const lectureEnd = new Date(lecture.end_time);
-        const isActive = now >= lectureStart && now <= lectureEnd;
-        const isUpcoming = now < lectureStart;
+        // Calculate distance if we have location
+        let distanceInfo = '';
+        let statusColor = 'secondary';
+        let actionButton = '';
         
-        const statusBadge = isActive ? 
-            '<span class="badge bg-success ms-2">Live Now</span>' : 
-            isUpcoming ? '<span class="badge bg-warning ms-2">Upcoming</span>' : 
-            '<span class="badge bg-secondary ms-2">Ended</span>';
+        if (currentUserLocation && lecture.location) {
+            const distance = calculateDistance(
+                currentUserLocation.coords.latitude,
+                currentUserLocation.coords.longitude,
+                lecture.location.latitude,
+                lecture.location.longitude
+            );
+            
+            const radius = lecture.location.radius || 50;
+            const isWithinRange = distance <= radius;
+            
+            distanceInfo = `
+                <div class="mt-2 p-2 rounded ${isWithinRange ? 'bg-success bg-opacity-10' : 'bg-warning bg-opacity-10'}">
+                    <small>
+                        <i class="fas fa-map-marker-alt"></i> Distance: <strong>${Math.round(distance)}m</strong> 
+                        (Required: ${radius}m)
+                        ${isWithinRange ? '<i class="fas fa-check text-success ms-1"></i>' : '<i class="fas fa-times text-warning ms-1"></i>'}
+                    </small>
+                </div>
+            `;
+            
+            statusColor = isWithinRange ? 'success' : 'warning';
+            
+            if (isWithinRange && !checkedInLectures.has(lecture.id)) {
+                actionButton = `<button class="btn btn-success btn-sm mt-2" onclick="autoCheckIn(${lecture.id})">
+                    <i class="fas fa-check"></i> Auto Check-In Available
+                </button>`;
+            }
+        }
         
         html += `
             <div class="col-md-6 mb-3">
-                <div class="card ${isActive ? 'border-success' : isUpcoming ? 'border-warning' : 'border-secondary'}">
+                <div class="card border-${statusColor}">
                     <div class="card-body">
-                        <h6 class="card-title">
-                            ${lecture.title}
-                            ${statusBadge}
-                        </h6>
+                        <h6 class="card-title">${lecture.title}</h6>
                         <p class="card-text text-muted">${lecture.course_code} - ${lecture.course_name}</p>
                         <p class="small text-muted">
                             <i class="fas fa-clock"></i> ${startTime} - ${endTime}
                         </p>
                         ${lecture.location && lecture.location.name ? `<p class="small text-muted"><i class="fas fa-map-marker-alt"></i> ${lecture.location.name}</p>` : ''}
-                        <div class="d-grid gap-2">
-                            ${isActive ? 
-                                `<a href="/student/lecture/${lecture.id}/enhanced-checkin" class="btn btn-success btn-sm">
-                                    <i class="fas fa-shield-alt"></i> Check In Now
-                                </a>` :
-                                `<button class="btn btn-outline-secondary btn-sm" disabled>
-                                    <i class="fas fa-clock"></i> ${isUpcoming ? 'Not Started' : 'Ended'}
-                                </button>`
-                            }
-                        </div>
+                        ${distanceInfo}
+                        ${actionButton}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    container.innerHTML = html;
+}
+
+// Simple location tracking
+function startLocationTracking() {
+    if (!navigator.geolocation) {
+        console.log('Geolocation not supported');
+        return;
+    }
+    
+    // Get location immediately
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            currentUserLocation = position;
+            console.log('Location obtained:', Math.round(position.coords.latitude * 10000) / 10000, Math.round(position.coords.longitude * 10000) / 10000);
+            updateLocationAndDistance();
+        },
+        (error) => {
+            console.log('Location error, will retry...');
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+    );
+    
+    // Watch location continuously
+    navigator.geolocation.watchPosition(
+        (position) => {
+            currentUserLocation = position;
+            updateLocationAndDistance();
+        },
+        (error) => {
+            // Silently handle errors
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+    );
+}
+
+function updateLocationAndDistance() {
+    if (!currentUserLocation || activeLectures.length === 0) return;
+    
+    // Check each lecture for auto check-in
+    activeLectures.forEach(lecture => {
+        if (checkedInLectures.has(lecture.id)) return;
+        
+        const distance = calculateDistance(
+            currentUserLocation.coords.latitude,
+            currentUserLocation.coords.longitude,
+            lecture.location.latitude,
+            lecture.location.longitude
+        );
+        
+        const radius = lecture.location.radius || 50;
+        
+        // Auto check-in if within range
+        if (distance <= radius) {
+            console.log(`Auto check-in triggered for ${lecture.title} - Distance: ${Math.round(distance)}m`);
+            performAutoCheckIn(lecture.id);
+        }
+    });
+    
+    // Refresh display to show updated distances
+    displayLectures(activeLectures);
+}
+
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+function autoCheckIn(lectureId) {
+    performAutoCheckIn(lectureId);
+}
+
+function performAutoCheckIn(lectureId) {
+    if (!currentUserLocation) return;
+    
+    checkedInLectures.add(lectureId);
+    
+    fetch('/student/api/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            lecture_id: lectureId,
+            latitude: currentUserLocation.coords.latitude,
+            longitude: currentUserLocation.coords.longitude,
+            auto_checkin: true
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(`✅ Checked in successfully! Distance: ${Math.round(data.distance)}m`, 'success');
+            refreshLectures(); // Refresh to update display
+        } else {
+            checkedInLectures.delete(lectureId); // Allow retry
+            console.error('Check-in failed:', data.message);
+        }
+    })
+    .catch(error => {
+        checkedInLectures.delete(lectureId); // Allow retry
+        console.error('Check-in error:', error);
+    });
+}
+
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}
+<script>
+// Simple automatic attendance system
+let currentUserLocation = null;
+let activeLectures = [];
+let checkedInLectures = new Set();
+let distanceUpdateInterval = null;
+
+// Start everything when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Starting simple automatic attendance...');
+    
+    // Get lectures and start location tracking
+    refreshLectures();
+    startLocationTracking();
+    
+    // Update every 5 seconds
+    setInterval(() => {
+        refreshLectures();
+        updateLocationAndDistance();
+    }, 5000);
+});
+
+function refreshLectures() {
+    fetch('/student/api/active-lectures')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            activeLectures = data.lectures || [];
+            document.getElementById('activeLecturesCount').textContent = data.count;
+            displayLectures(activeLectures);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading lectures:', error);
+    });
+}
+
+function displayLectures(lectures) {
+    const container = document.getElementById('activeLectures');
+    
+    if (lectures.length === 0) {
+        container.innerHTML = '<div class="alert alert-info text-center">No active lectures at the moment.</div>';
+        return;
+    }
+    
+    let html = '<div class="row">';
+    lectures.forEach(lecture => {
+        const startTime = new Date(lecture.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true});
+        const endTime = new Date(lecture.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true});
+        
+        // Calculate distance if we have location
+        let distanceInfo = '';
+        let statusColor = 'secondary';
+        let actionButton = '';
+        
+        if (currentUserLocation && lecture.location) {
+            const distance = calculateDistance(
+                currentUserLocation.coords.latitude,
+                currentUserLocation.coords.longitude,
+                lecture.location.latitude,
+                lecture.location.longitude
+            );
+            
+            const radius = lecture.location.radius || 50;
+            const isWithinRange = distance <= radius;
+            
+            distanceInfo = `
+                <div class="mt-2 p-2 rounded ${isWithinRange ? 'bg-success bg-opacity-10' : 'bg-warning bg-opacity-10'}">
+                    <small>
+                        <i class="fas fa-map-marker-alt"></i> Distance: <strong>${Math.round(distance)}m</strong> 
+                        (Required: ${radius}m)
+                        ${isWithinRange ? '<i class="fas fa-check text-success ms-1"></i>' : '<i class="fas fa-times text-warning ms-1"></i>'}
+                    </small>
+                </div>
+            `;
+            
+            statusColor = isWithinRange ? 'success' : 'warning';
+            
+            if (isWithinRange && !checkedInLectures.has(lecture.id)) {
+                actionButton = `<button class="btn btn-success btn-sm mt-2" onclick="autoCheckIn(${lecture.id})">
+                    <i class="fas fa-check"></i> Auto Check-In Available
+                </button>`;
+            }
+        }
+        
+        html += `
+            <div class="col-md-6 mb-3">
+                <div class="card border-${statusColor}">
+                    <div class="card-body">
+                        <h6 class="card-title">${lecture.title}</h6>
+                        <p class="card-text text-muted">${lecture.course_code} - ${lecture.course_name}</p>
+                        <p class="small text-muted">
+                            <i class="fas fa-clock"></i> ${startTime} - ${endTime}
+                        </p>
+                        ${lecture.location && lecture.location.name ? `<p class="small text-muted"><i class="fas fa-map-marker-alt"></i> ${lecture.location.name}</p>` : ''}
+                        ${distanceInfo}
+                        ${actionButton}
                     </div>
                 </div>
             </div>
@@ -435,6 +569,66 @@ document.getElementById('confirmCheckin').addEventListener('click', function() {
     });
 });
 
+// Simple location tracking
+function startLocationTracking() {
+    if (!navigator.geolocation) {
+        console.log('Geolocation not supported');
+        return;
+    }
+    
+    // Get location immediately
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            currentUserLocation = position;
+            console.log('Location obtained:', Math.round(position.coords.latitude * 10000) / 10000, Math.round(position.coords.longitude * 10000) / 10000);
+            updateLocationAndDistance();
+        },
+        (error) => {
+            console.log('Location error, will retry...');
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+    );
+    
+    // Watch location continuously
+    navigator.geolocation.watchPosition(
+        (position) => {
+            currentUserLocation = position;
+            updateLocationAndDistance();
+        },
+        (error) => {
+            // Silently handle errors
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
+    );
+}
+
+function updateLocationAndDistance() {
+    if (!currentUserLocation || activeLectures.length === 0) return;
+    
+    // Check each lecture for auto check-in
+    activeLectures.forEach(lecture => {
+        if (checkedInLectures.has(lecture.id)) return;
+        
+        const distance = calculateDistance(
+            currentUserLocation.coords.latitude,
+            currentUserLocation.coords.longitude,
+            lecture.location.latitude,
+            lecture.location.longitude
+        );
+        
+        const radius = lecture.location.radius || 50;
+        
+        // Auto check-in if within range
+        if (distance <= radius) {
+            console.log(`Auto check-in triggered for ${lecture.title} - Distance: ${Math.round(distance)}m`);
+            performAutoCheckIn(lecture.id);
+        }
+    });
+    
+    // Refresh display to show updated distances
+    displayLectures(activeLectures);
+}
+
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000; // Earth's radius in meters
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -444,6 +638,59 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
               Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+}
+
+function autoCheckIn(lectureId) {
+    performAutoCheckIn(lectureId);
+}
+
+function performAutoCheckIn(lectureId) {
+    if (!currentUserLocation) return;
+    
+    checkedInLectures.add(lectureId);
+    
+    fetch('/student/api/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            lecture_id: lectureId,
+            latitude: currentUserLocation.coords.latitude,
+            longitude: currentUserLocation.coords.longitude,
+            auto_checkin: true
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(`✅ Checked in successfully! Distance: ${Math.round(data.distance)}m`, 'success');
+            refreshLectures(); // Refresh to update display
+        } else {
+            checkedInLectures.delete(lectureId); // Allow retry
+            console.error('Check-in failed:', data.message);
+        }
+    })
+    .catch(error => {
+        checkedInLectures.delete(lectureId); // Allow retry
+        console.error('Check-in error:', error);
+    });
+}
+
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
 }
 
 // Auto check-in functionality
