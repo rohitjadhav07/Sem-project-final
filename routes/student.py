@@ -239,6 +239,7 @@ def api_checkin():
         lecture_id = data.get('lecture_id')
         student_lat = data.get('latitude')
         student_lon = data.get('longitude')
+        auto_checkin = data.get('auto_checkin', False)  # Flag for automatic check-in
         
         if not all([lecture_id, student_lat, student_lon]):
             return jsonify({'success': False, 'message': 'Missing required location data'})
@@ -315,17 +316,21 @@ def api_checkin():
             marked_at=datetime.now(IST),
             student_latitude=float(student_lat),
             student_longitude=float(student_lon),
-            distance_from_lecture=distance
+            distance_from_lecture=distance,
+            notes=f"Auto check-in: {distance:.1f}m from lecture" if auto_checkin else None
         )
         
         db.session.add(attendance)
         db.session.commit()
         
+        success_message = f"{'Auto-' if auto_checkin else ''}Attendance marked successfully! You were {distance:.1f}m from the lecture location."
+        
         return jsonify({
             'success': True, 
-            'message': f'Attendance marked successfully! You were {distance:.1f}m from the lecture location.',
+            'message': success_message,
             'distance': round(distance, 1),
             'required_radius': geofence_radius,
+            'auto_checkin': auto_checkin,
             'timestamp': datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')
         })
         

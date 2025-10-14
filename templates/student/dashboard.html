@@ -132,28 +132,87 @@
     </div>
 </div>
 
-<!-- Location Check-in Modal -->
-<div class="modal fade" id="checkinModal" tabindex="-1">
+<!-- Location Permission Help Modal -->
+<div class="modal fade" id="locationPermissionModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Check-in to Lecture</h5>
+                <h5 class="modal-title">📍 Enable Location Access</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div id="locationStatus" class="alert alert-info">
-                    <i class="fas fa-spinner fa-spin"></i> Getting your location...
+                <div class="alert alert-info">
+                    <strong>🎯 Automatic attendance requires location access</strong><br>
+                    We'll automatically mark your attendance when you're near a lecture location.
                 </div>
-                <div id="lectureInfo" style="display: none;">
-                    <h6 id="lectureTitle"></h6>
-                    <p id="courseInfo" class="text-muted"></p>
-                    <p><strong>Distance:</strong> <span id="distance"></span> meters</p>
+                
+                <h6>How to enable location access:</h6>
+                
+                <div class="accordion" id="locationHelp">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#chrome-help">
+                                Chrome / Edge
+                            </button>
+                        </h2>
+                        <div id="chrome-help" class="accordion-collapse collapse show" data-bs-parent="#locationHelp">
+                            <div class="accordion-body">
+                                <ol>
+                                    <li>Click the <strong>🔒 lock icon</strong> in the address bar</li>
+                                    <li>Set <strong>"Location"</strong> to <strong>"Allow"</strong></li>
+                                    <li>Refresh the page</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#firefox-help">
+                                Firefox
+                            </button>
+                        </h2>
+                        <div id="firefox-help" class="accordion-collapse collapse" data-bs-parent="#locationHelp">
+                            <div class="accordion-body">
+                                <ol>
+                                    <li>Click the <strong>🛡️ shield icon</strong> in the address bar</li>
+                                    <li>Click <strong>"Allow Location Access"</strong></li>
+                                    <li>Refresh the page</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#mobile-help">
+                                Mobile Browsers
+                            </button>
+                        </h2>
+                        <div id="mobile-help" class="accordion-collapse collapse" data-bs-parent="#locationHelp">
+                            <div class="accordion-body">
+                                <ol>
+                                    <li>Go to your browser settings</li>
+                                    <li>Find <strong>"Site permissions"</strong> or <strong>"Location"</strong></li>
+                                    <li>Allow location for this website</li>
+                                    <li>Refresh the page</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning mt-3">
+                    <strong>Still not working?</strong><br>
+                    • Make sure you're not in incognito/private mode<br>
+                    • Try refreshing the page<br>
+                    • Move to an area with better GPS signal
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" id="confirmCheckin" disabled>
-                    <i class="fas fa-map-marker-alt"></i> Check In
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="requestLocationPermission()">
+                    <i class="fas fa-redo"></i> Try Again
                 </button>
             </div>
         </div>
@@ -166,9 +225,10 @@
 let currentLecture = null;
 let userLocation = null;
 
-// Load active lectures on page load
+// Load active lectures on page load and start auto check-in
 document.addEventListener('DOMContentLoaded', function() {
     refreshLectures();
+    startAutoCheckIn();
 });
 
 function refreshLectures() {
@@ -367,6 +427,252 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
               Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
+}
+
+// Auto check-in functionality
+let autoCheckInInterval = null;
+let currentUserLocation = null;
+let checkedInLectures = new Set();
+
+function startAutoCheckIn() {
+    console.log('🚀 Starting automatic check-in system...');
+    
+    // Request location permission immediately
+    requestLocationPermission();
+    
+    // Check every 30 seconds for auto check-in opportunities
+    autoCheckInInterval = setInterval(() => {
+        if (currentUserLocation) {
+            checkForAutoCheckIn();
+        }
+    }, 30000);
+    
+    // Also check immediately after getting location
+    setTimeout(() => {
+        if (currentUserLocation) {
+            checkForAutoCheckIn();
+        }
+    }, 5000);
+}
+
+function requestLocationPermission() {
+    console.log('📍 Requesting location permission...');
+    
+    if (!navigator.geolocation) {
+        console.error('❌ Geolocation not supported');
+        showLocationStatus('Geolocation not supported by your browser', 'error');
+        return;
+    }
+    
+    // Show loading status
+    showLocationStatus('Requesting location permission...', 'info');
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            currentUserLocation = position;
+            console.log('✅ Location obtained:', position.coords);
+            showLocationStatus(`Location enabled! Accuracy: ±${Math.round(position.coords.accuracy)}m`, 'success');
+            
+            // Start watching location for continuous updates
+            startLocationWatching();
+            
+            // Check for immediate auto check-in
+            setTimeout(() => checkForAutoCheckIn(), 2000);
+        },
+        (error) => {
+            console.error('❌ Location error:', error);
+            handleLocationError(error);
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 60000
+        }
+    );
+}
+
+function startLocationWatching() {
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(
+            (position) => {
+                currentUserLocation = position;
+                console.log('📍 Location updated:', position.coords);
+            },
+            (error) => {
+                console.warn('⚠️ Location watch error:', error);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 30000
+            }
+        );
+    }
+}
+
+function handleLocationError(error) {
+    let message = 'Unable to get your location. ';
+    
+    switch (error.code) {
+        case error.PERMISSION_DENIED:
+            message = 'Location access denied. Click "Enable Location" for automatic attendance.';
+            showLocationStatus(message + ' <button class="btn btn-sm btn-outline-primary ms-2" onclick="showLocationHelp()">Enable Location</button>', 'error');
+            break;
+        case error.POSITION_UNAVAILABLE:
+            message = 'Your location is currently unavailable. Please ensure GPS is enabled.';
+            showLocationStatus(message, 'error');
+            break;
+        case error.TIMEOUT:
+            message = 'Location request timed out. Please try again.';
+            showLocationStatus(message + ' <button class="btn btn-sm btn-outline-primary ms-2" onclick="requestLocationPermission()">Try Again</button>', 'error');
+            break;
+        default:
+            showLocationStatus(message, 'error');
+    }
+}
+
+function showLocationHelp() {
+    const modal = new bootstrap.Modal(document.getElementById('locationPermissionModal'));
+    modal.show();
+}
+
+function showLocationStatus(message, type) {
+    // Create or update status indicator
+    let statusDiv = document.getElementById('locationStatus');
+    if (!statusDiv) {
+        statusDiv = document.createElement('div');
+        statusDiv.id = 'locationStatus';
+        statusDiv.className = 'alert alert-sm mb-2';
+        
+        // Insert at top of page
+        const container = document.querySelector('.container-fluid');
+        if (container) {
+            container.insertBefore(statusDiv, container.firstChild);
+        }
+    }
+    
+    // Update status
+    statusDiv.className = `alert alert-sm mb-2 alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'}`;
+    statusDiv.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'}"></i>
+        ${message}
+    `;
+    
+    // Auto-hide success messages after 5 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            if (statusDiv) {
+                statusDiv.style.display = 'none';
+            }
+        }, 5000);
+    }
+}
+
+function checkForAutoCheckIn() {
+    if (!currentUserLocation) {
+        console.log('⚠️ No location available for auto check-in');
+        return;
+    }
+    
+    console.log('🔍 Checking for auto check-in opportunities...');
+    
+    // Get current active lectures
+    fetch('/student/api/active-lectures')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.lectures) {
+            data.lectures.forEach(lecture => {
+                // Skip if already checked in to this lecture
+                if (checkedInLectures.has(lecture.id)) {
+                    return;
+                }
+                
+                // Check if within geofence
+                const distance = calculateDistance(
+                    currentUserLocation.coords.latitude,
+                    currentUserLocation.coords.longitude,
+                    lecture.location.latitude,
+                    lecture.location.longitude
+                );
+                
+                console.log(`📏 Distance to ${lecture.title}: ${Math.round(distance)}m (required: ${lecture.location.radius}m)`);
+                
+                if (distance <= lecture.location.radius) {
+                    console.log(`✅ Auto check-in possible for: ${lecture.title}`);
+                    performAutoCheckIn(lecture, distance);
+                }
+            });
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error checking for auto check-in:', error);
+    });
+}
+
+function performAutoCheckIn(lecture, distance) {
+    console.log(`🎯 Performing auto check-in for: ${lecture.title}`);
+    
+    // Mark as checked in to prevent duplicates
+    checkedInLectures.add(lecture.id);
+    
+    // Show notification
+    showAutoCheckInNotification(lecture, distance);
+    
+    // Perform the check-in
+    fetch('/student/api/checkin', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            lecture_id: lecture.id,
+            latitude: currentUserLocation.coords.latitude,
+            longitude: currentUserLocation.coords.longitude,
+            auto_checkin: true
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log(`✅ Auto check-in successful for: ${lecture.title}`);
+            showLocationStatus(`✅ Automatically checked in to ${lecture.title}! Distance: ${Math.round(distance)}m`, 'success');
+            
+            // Refresh lectures to update UI
+            setTimeout(() => refreshLectures(), 1000);
+        } else {
+            console.error(`❌ Auto check-in failed for ${lecture.title}:`, data.message);
+            checkedInLectures.delete(lecture.id); // Allow retry
+        }
+    })
+    .catch(error => {
+        console.error(`❌ Auto check-in error for ${lecture.title}:`, error);
+        checkedInLectures.delete(lecture.id); // Allow retry
+    });
+}
+
+function showAutoCheckInNotification(lecture, distance) {
+    // Create notification
+    const notification = document.createElement('div');
+    notification.className = 'alert alert-success alert-dismissible fade show';
+    notification.innerHTML = `
+        <strong>🎯 Auto Check-in!</strong><br>
+        <strong>${lecture.title}</strong><br>
+        <small>Distance: ${Math.round(distance)}m • ${lecture.course_code}</small>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Add to page
+    const container = document.querySelector('.container-fluid');
+    if (container) {
+        container.insertBefore(notification, container.firstChild);
+    }
+    
+    // Auto-remove after 8 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 8000);
 }
 </script>
 {% endblock %}
