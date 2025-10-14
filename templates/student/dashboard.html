@@ -68,6 +68,9 @@
                     <button class="btn btn-sm btn-outline-primary me-2" onclick="refreshLectures()">
                         <i class="fas fa-sync-alt"></i> Refresh
                     </button>
+                    <button class="btn btn-sm btn-outline-success me-2" onclick="testLocationAccess()" title="Test location access">
+                        <i class="fas fa-map-marker-alt"></i> Test Location
+                    </button>
                     <a href="{{ url_for('student.active_lectures') }}" class="btn btn-sm btn-primary">
                         <i class="fas fa-eye"></i> View All
                     </a>
@@ -236,6 +239,11 @@ let userLocation = null;
 
 // Load active lectures on page load and start auto check-in
 document.addEventListener('DOMContentLoaded', function() {
+    // Check if we're on HTTPS (required for location in production)
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        showLocationStatus('⚠️ Location services require HTTPS in production. Some features may not work.', 'error');
+    }
+    
     refreshLectures();
     startAutoCheckIn();
 });
@@ -443,16 +451,19 @@ let autoCheckInInterval = null;
 let currentUserLocation = null;
 let checkedInLectures = new Set();
 
-function startAutoCheckIn() {
+async function startAutoCheckIn() {
     console.log('🚀 Starting automatic check-in system...');
     
-    // Request location permission immediately
-    requestLocationPermission();
+    // Check permission status first
+    await checkLocationPermission();
     
     // Check every 30 seconds for auto check-in opportunities
     autoCheckInInterval = setInterval(() => {
         if (currentUserLocation) {
             checkForAutoCheckIn();
+        } else {
+            // Try to get location again if we don't have it
+            requestLocationPermission();
         }
     }, 30000);
     
@@ -462,6 +473,47 @@ function startAutoCheckIn() {
             checkForAutoCheckIn();
         }
     }, 5000);
+}
+
+async function checkLocationPermission() {
+    console.log('🔍 Checking location permission status...');
+    
+    // Check if permissions API is available
+    if ('permissions' in navigator) {
+        try {
+            const permission = await navigator.permissions.query({name: 'geolocation'});
+            console.log('📋 Permission status:', permission.state);
+            
+            switch (permission.state) {
+                case 'granted':
+                    showLocationStatus('Location permission granted! Getting your location...', 'success');
+                    requestLocationPermission();
+                    break;
+                case 'denied':
+                    showLocationStatus('Location access denied. Please enable location access. <button class="btn btn-sm btn-outline-primary ms-2" onclick="showLocationHelp()">Enable Location</button>', 'error');
+                    break;
+                case 'prompt':
+                    showLocationStatus('Location permission required. Click allow when prompted.', 'info');
+                    requestLocationPermission();
+                    break;
+            }
+            
+            // Listen for permission changes
+            permission.addEventListener('change', () => {
+                console.log('📋 Permission changed to:', permission.state);
+                if (permission.state === 'granted') {
+                    requestLocationPermission();
+                }
+            });
+            
+        } catch (error) {
+            console.log('⚠️ Permissions API not supported, trying direct location request');
+            requestLocationPermission();
+        }
+    } else {
+        console.log('⚠️ Permissions API not available, trying direct location request');
+        requestLocationPermission();
+    }
 }
 
 function requestLocationPermission() {
@@ -476,11 +528,21 @@ function requestLocationPermission() {
     // Show loading status
     showLocationStatus('Requesting location permission...', 'info');
     
+    // Try with more permissive options first
+    const options = {
+        enableHighAccuracy: false,  // Start with less strict requirements
+        timeout: 30000,             // Longer timeout
+        maximumAge: 300000          // 5 minutes cache
+    };
+    
     navigator.geolocation.getCurrentPosition(
         (position) => {
             currentUserLocation = position;
             console.log('✅ Location obtained:', position.coords);
             showLocationStatus(`Location enabled! Accuracy: ±${Math.round(position.coords.accuracy)}m`, 'success');
+            
+            // Now try to get high accuracy location
+            getHighAccuracyLocation();
             
             // Start watching location for continuous updates
             startLocationWatching();
@@ -490,12 +552,60 @@ function requestLocationPermission() {
         },
         (error) => {
             console.error('❌ Location error:', error);
-            handleLocationError(error);
+            
+            // If first attempt fails, try with different options
+            if (error.code === error.TIMEOUT) {
+                console.log('⚠️ Timeout, trying with lower accuracy...');
+                tryFallbackLocation();
+            } else {
+                handleLocationError(error);
+            }
+        },
+        options
+    );
+}
+
+function getHighAccuracyLocation() {
+    // Try to get more accurate location after initial success
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            if (position.coords.accuracy < currentUserLocation.coords.accuracy) {
+                currentUserLocation = position;
+                console.log('✅ High accuracy location obtained:', position.coords);
+                showLocationStatus(`High accuracy location! Accuracy: ±${Math.round(position.coords.accuracy)}m`, 'success');
+            }
+        },
+        (error) => {
+            console.log('⚠️ High accuracy location failed, using standard location');
         },
         {
             enableHighAccuracy: true,
-            timeout: 15000,
+            timeout: 10000,
             maximumAge: 60000
+        }
+    );
+}
+
+function tryFallbackLocation() {
+    console.log('🔄 Trying fallback location options...');
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            currentUserLocation = position;
+            console.log('✅ Fallback location obtained:', position.coords);
+            showLocationStatus(`Location enabled (fallback)! Accuracy: ±${Math.round(position.coords.accuracy)}m`, 'success');
+            
+            startLocationWatching();
+            setTimeout(() => checkForAutoCheckIn(), 2000);
+        },
+        (error) => {
+            console.error('❌ Fallback location also failed:', error);
+            handleLocationError(error);
+        },
+        {
+            enableHighAccuracy: false,
+            timeout: 60000,
+            maximumAge: 600000  // 10 minutes cache
         }
     );
 }
@@ -521,28 +631,119 @@ function startLocationWatching() {
 
 function handleLocationError(error) {
     let message = 'Unable to get your location. ';
+    let isRetryable = false;
     
     switch (error.code) {
         case error.PERMISSION_DENIED:
-            message = 'Location access denied. Click "Enable Location" for automatic attendance.';
-            showLocationStatus(message + ' <button class="btn btn-sm btn-outline-primary ms-2" onclick="showLocationHelp()">Enable Location</button>', 'error');
+            message = '🚫 Location access denied. Please enable location access in your browser settings.';
+            showLocationStatus(message + ' <button class="btn btn-sm btn-outline-primary ms-2" onclick="showLocationHelp()">How to Enable</button>', 'error');
+            
+            // Also try to detect if it's a temporary denial
+            setTimeout(() => {
+                showLocationStatus('💡 Tip: Look for a location icon (🔒 or 📍) in your browser address bar and click "Allow"', 'info');
+            }, 3000);
             break;
+            
         case error.POSITION_UNAVAILABLE:
-            message = 'Your location is currently unavailable. Please ensure GPS is enabled.';
-            showLocationStatus(message, 'error');
+            message = '📡 Your location is currently unavailable. Please check your device settings.';
+            isRetryable = true;
             break;
+            
         case error.TIMEOUT:
-            message = 'Location request timed out. Please try again.';
-            showLocationStatus(message + ' <button class="btn btn-sm btn-outline-primary ms-2" onclick="requestLocationPermission()">Try Again</button>', 'error');
+            message = '⏱️ Location request timed out. This might be due to poor GPS signal.';
+            isRetryable = true;
             break;
+            
         default:
-            showLocationStatus(message, 'error');
+            message = '❌ Unknown location error occurred.';
+            isRetryable = true;
     }
+    
+    if (isRetryable) {
+        showLocationStatus(message + ' <button class="btn btn-sm btn-outline-primary ms-2" onclick="requestLocationPermission()">Try Again</button>', 'error');
+        
+        // Auto-retry after 10 seconds for timeout/unavailable errors
+        setTimeout(() => {
+            console.log('🔄 Auto-retrying location request...');
+            requestLocationPermission();
+        }, 10000);
+    } else {
+        showLocationStatus(message, 'error');
+    }
+    
+    // Show additional help based on user agent
+    setTimeout(() => {
+        const userAgent = navigator.userAgent.toLowerCase();
+        let helpText = '';
+        
+        if (userAgent.includes('chrome')) {
+            helpText = '💡 Chrome: Click the 🔒 icon in address bar → Location → Allow';
+        } else if (userAgent.includes('firefox')) {
+            helpText = '💡 Firefox: Click the 🛡️ icon in address bar → Allow Location Access';
+        } else if (userAgent.includes('safari')) {
+            helpText = '💡 Safari: Safari menu → Preferences → Websites → Location Services';
+        } else if (userAgent.includes('mobile')) {
+            helpText = '💡 Mobile: Check browser settings → Site permissions → Location';
+        }
+        
+        if (helpText) {
+            console.log(helpText);
+        }
+    }, 2000);
 }
 
 function showLocationHelp() {
     const modal = new bootstrap.Modal(document.getElementById('locationPermissionModal'));
     modal.show();
+}
+
+function testLocationAccess() {
+    console.log('🧪 Testing location access...');
+    showLocationStatus('Testing location access...', 'info');
+    
+    if (!navigator.geolocation) {
+        showLocationStatus('❌ Geolocation not supported by your browser', 'error');
+        return;
+    }
+    
+    // Test with very permissive settings
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            console.log('✅ Location test successful:', position.coords);
+            showLocationStatus(`✅ Location test successful! Lat: ${position.coords.latitude.toFixed(4)}, Lon: ${position.coords.longitude.toFixed(4)}, Accuracy: ±${Math.round(position.coords.accuracy)}m`, 'success');
+            
+            // Update current location if we don't have one
+            if (!currentUserLocation) {
+                currentUserLocation = position;
+                startLocationWatching();
+            }
+        },
+        (error) => {
+            console.error('❌ Location test failed:', error);
+            let errorMsg = 'Location test failed: ';
+            
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMsg += 'Permission denied. Please allow location access.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMsg += 'Position unavailable. Check your GPS settings.';
+                    break;
+                case error.TIMEOUT:
+                    errorMsg += 'Request timed out. Try moving to a better location.';
+                    break;
+                default:
+                    errorMsg += 'Unknown error occurred.';
+            }
+            
+            showLocationStatus(errorMsg + ' <button class="btn btn-sm btn-outline-primary ms-2" onclick="showLocationHelp()">Get Help</button>', 'error');
+        },
+        {
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 60000
+        }
+    );
 }
 
 function showLocationStatus(message, type) {
