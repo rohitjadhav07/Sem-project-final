@@ -56,7 +56,7 @@ def dashboard():
     # Get recent attendance
     recent_attendance = Attendance.query.filter_by(student_id=current_user.id)\
         .join(Lecture)\
-        .order_by(Lecture.scheduled_start.desc())\
+        .order_by(Attendance.marked_at.desc())\
         .limit(10)\
         .all()
     

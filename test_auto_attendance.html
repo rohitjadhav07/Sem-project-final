@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Auto Attendance</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Auto Attendance Test</h1>
+    <div id="status"></div>
+    <button onclick="testLocation()">Test Location</button>
+    <button onclick="testAutoCheckIn()">Test Auto Check-in</button>
+    
+    <script>
+        function showStatus(message, type) {
+            const div = document.getElementById('status');
+            div.innerHTML = `<div class="status ${type}">${message}</div>` + div.innerHTML;
+        }
+        
+        function testLocation() {
+            showStatus('Testing location access...', 'info');
+            
+            if (!navigator.geolocation) {
+                showStatus('❌ Geolocation not supported', 'error');
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    showStatus(`✅ Location obtained: ${position.coords.latitude}, ${position.coords.longitude} (±${Math.round(position.coords.accuracy)}m)`, 'success');
+                },
+                (error) => {
+                    let message = '❌ Location error: ';
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            message += 'Permission denied';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            message += 'Position unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            message += 'Timeout';
+                            break;
+                    }
+                    showStatus(message, 'error');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 60000
+                }
+            );
+        }
+        
+        function testAutoCheckIn() {
+            showStatus('Testing auto check-in logic...', 'info');
+            
+            // Simulate the auto check-in process
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    showStatus(`📍 Current location: ${position.coords.latitude}, ${position.coords.longitude}`, 'info');
+                    
+                    // Test distance calculation
+                    const testLecture = {
+                        latitude: position.coords.latitude + 0.0001, // Very close
+                        longitude: position.coords.longitude + 0.0001,
+                        radius: 50
+                    };
+                    
+                    const distance = calculateDistance(
+                        position.coords.latitude,
+                        position.coords.longitude,
+                        testLecture.latitude,
+                        testLecture.longitude
+                    );
+                    
+                    showStatus(`📏 Distance to test lecture: ${Math.round(distance)}m`, 'info');
+                    
+                    if (distance <= testLecture.radius) {
+                        showStatus(`✅ Within geofence! Auto check-in would trigger.`, 'success');
+                    } else {
+                        showStatus(`⚠️ Outside geofence (${testLecture.radius}m). Auto check-in would not trigger.`, 'error');
+                    }
+                },
+                (error) => {
+                    showStatus('❌ Cannot test auto check-in without location', 'error');
+                }
+            );
+        }
+        
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Earth's radius in meters
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        // Auto-test on load
+        window.onload = function() {
+            showStatus('🚀 Auto attendance test page loaded', 'info');
+            testLocation();
+        };
+    </script>
+</body>
+</html>

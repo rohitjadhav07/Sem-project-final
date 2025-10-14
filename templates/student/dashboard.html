@@ -113,7 +113,16 @@
                                 <tr>
                                     <td>{{ attendance.lecture.course.code }}</td>
                                     <td>{{ attendance.lecture.title }}</td>
-                                    <td>{{ attendance.marked_at.strftime('%Y-%m-%d %H:%M') if attendance.marked_at else 'N/A' }}</td>
+                                    <td>
+                                        {% if attendance.marked_at %}
+                                            {{ attendance.marked_at.strftime('%Y-%m-%d %H:%M') }}
+                                            {% if attendance.distance_from_lecture %}
+                                                <br><small class="text-muted">Distance: {{ "%.1f"|format(attendance.distance_from_lecture) }}m</small>
+                                            {% endif %}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'danger' if attendance.status == 'absent' else 'warning' }}">
                                             {{ attendance.status.title() }}

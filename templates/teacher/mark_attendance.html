@@ -129,9 +129,9 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if attendance and attendance.marked_latitude and attendance.marked_longitude %}
+                                    {% if attendance and attendance.student_latitude and attendance.student_longitude %}
                                         <small>
-                                            {{ "%.4f"|format(attendance.marked_latitude) }}, {{ "%.4f"|format(attendance.marked_longitude) }}
+                                            {{ "%.4f"|format(attendance.student_latitude) }}, {{ "%.4f"|format(attendance.student_longitude) }}
                                             {% if attendance.distance_from_lecture %}
                                                 <br>{{ "%.1f"|format(attendance.distance_from_lecture) }}m away
                                             {% endif %}
