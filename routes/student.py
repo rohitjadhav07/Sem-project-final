@@ -678,13 +678,23 @@ def api_active_lectures():
             
             # Add to available lectures if window is open and no attendance marked
             if not existing_attendance and window_open:
+                # Ensure times are timezone-aware for proper conversion
+                start_time = lecture.scheduled_start
+                end_time = lecture.scheduled_end
+                
+                # If times are naive, assume they're in IST
+                if start_time.tzinfo is None:
+                    start_time = start_time.replace(tzinfo=IST)
+                if end_time.tzinfo is None:
+                    end_time = end_time.replace(tzinfo=IST)
+                
                 available_lectures.append({
                     'id': lecture.id,
                     'title': lecture.title,
                     'course_code': lecture.course.code,
                     'course_name': lecture.course.name,
-                    'start_time': lecture.scheduled_start.isoformat(),
-                    'end_time': lecture.scheduled_end.isoformat(),
+                    'start_time': start_time.isoformat(),
+                    'end_time': end_time.isoformat(),
                     'location': {
                         'latitude': lecture.latitude,
                         'longitude': lecture.longitude,

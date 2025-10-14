@@ -216,13 +216,13 @@ function displayLectures(lectures) {
     
     let html = '<div class="row">';
     lectures.forEach(lecture => {
-        // Convert UTC times to local device time
-        const startTime = new Date(lecture.start_time + 'Z').toLocaleTimeString([], {
+        // Parse timezone-aware times properly
+        const startTime = new Date(lecture.start_time).toLocaleTimeString([], {
             hour: '2-digit', 
             minute: '2-digit',
             hour12: true
         });
-        const endTime = new Date(lecture.end_time + 'Z').toLocaleTimeString([], {
+        const endTime = new Date(lecture.end_time).toLocaleTimeString([], {
             hour: '2-digit', 
             minute: '2-digit',
             hour12: true
@@ -230,8 +230,8 @@ function displayLectures(lectures) {
         
         // Check if lecture is currently active
         const now = new Date();
-        const lectureStart = new Date(lecture.start_time + 'Z');
-        const lectureEnd = new Date(lecture.end_time + 'Z');
+        const lectureStart = new Date(lecture.start_time);
+        const lectureEnd = new Date(lecture.end_time);
         const isActive = now >= lectureStart && now <= lectureEnd;
         const isUpcoming = now < lectureStart;
         
