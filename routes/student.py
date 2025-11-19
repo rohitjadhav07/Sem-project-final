@@ -290,16 +290,56 @@ def api_checkin():
                 'message': 'Attendance already marked for this lecture'
             })
         
-        # Validate GPS accuracy against threshold
+        # Calculate distance from lecture center first (for smart validation)
+        import math
+        def calculate_distance(lat1, lon1, lat2, lon2):
+            R = 6371000
+            lat1_rad = math.radians(lat1)
+            lat2_rad = math.radians(lat2)
+            delta_lat = math.radians(lat2 - lat1)
+            delta_lon = math.radians(lon2 - lon1)
+            a = (math.sin(delta_lat/2) * math.sin(delta_lat/2) +
+                 math.cos(lat1_rad) * math.cos(lat2_rad) *
+                 math.sin(delta_lon/2) * math.sin(delta_lon/2))
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+            return R * c
+        
+        distance_from_center = calculate_distance(
+            float(student_lat), float(student_lon),
+            float(lecture.latitude), float(lecture.longitude)
+        )
+        
+        # Smart GPS accuracy validation based on distance
         gps_threshold = lecture.gps_accuracy_threshold or 20
-        if gps_accuracy > gps_threshold:
+        
+        # If student is very close to lecture center (< 10m), accept any GPS accuracy
+        # This handles cases where student is clearly in the classroom
+        if distance_from_center < 10:
+            # Student is obviously in the classroom, accept even with poor GPS
+            print(f"Smart validation: Student very close ({distance_from_center:.1f}m), accepting despite GPS accuracy {gps_accuracy:.1f}m")
+        # If student is reasonably close (10-30m), require moderate GPS accuracy (< 50m)
+        elif distance_from_center < 30 and gps_accuracy > 50:
+            return jsonify({
+                'success': False,
+                'message': f'GPS accuracy too low: {gps_accuracy:.1f}m (required: ≤50m for your distance)',
+                'validation': {
+                    'gps_accuracy_acceptable': False,
+                    'required_accuracy': 50,
+                    'current_accuracy': gps_accuracy,
+                    'distance_from_center': round(distance_from_center, 1)
+                },
+                'guidance': 'Move to an area with better GPS signal (outdoors or near windows)'
+            })
+        # If student is at edge of boundary (30-50m), require good GPS accuracy
+        elif distance_from_center >= 30 and gps_accuracy > gps_threshold:
             return jsonify({
                 'success': False,
                 'message': f'GPS accuracy too low: {gps_accuracy:.1f}m (required: ≤{gps_threshold}m)',
                 'validation': {
                     'gps_accuracy_acceptable': False,
                     'required_accuracy': gps_threshold,
-                    'current_accuracy': gps_accuracy
+                    'current_accuracy': gps_accuracy,
+                    'distance_from_center': round(distance_from_center, 1)
                 },
                 'guidance': 'Move to an area with better GPS signal (outdoors or near windows)'
             })
@@ -342,24 +382,7 @@ def api_checkin():
             
             return jsonify(error_response)
         
-        # Calculate distance for attendance record
-        import math
-        def calculate_distance(lat1, lon1, lat2, lon2):
-            R = 6371000
-            lat1_rad = math.radians(lat1)
-            lat2_rad = math.radians(lat2)
-            delta_lat = math.radians(lat2 - lat1)
-            delta_lon = math.radians(lon2 - lon1)
-            a = (math.sin(delta_lat/2) * math.sin(delta_lat/2) +
-                 math.cos(lat1_rad) * math.cos(lat2_rad) *
-                 math.sin(delta_lon/2) * math.sin(delta_lon/2))
-            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-            return R * c
-        
-        distance_from_center = calculate_distance(
-            float(student_lat), float(student_lon),
-            float(lecture.latitude), float(lecture.longitude)
-        )
+        # distance_from_center already calculated above
         
         # Mark attendance with enhanced metadata
         attendance = Attendance(
@@ -382,15 +405,24 @@ def api_checkin():
         db.session.add(attendance)
         db.session.commit()
         
+        # Determine if smart validation was used
+        smart_validation_used = distance_from_center < 10 and gps_accuracy > gps_threshold
+        
         # Build success response
+        success_message = f"{'Auto-' if auto_checkin else ''}Attendance marked successfully!"
+        if smart_validation_used:
+            success_message += f" (Smart validation: {distance_from_center:.1f}m from center)"
+        
         success_response = {
             'success': True,
-            'message': f"{'Auto-' if auto_checkin else ''}Attendance marked successfully!",
+            'message': success_message,
             'validation': {
                 'method': validation_result['method'],
                 'inside_boundary': True,
                 'gps_accuracy_acceptable': True,
-                'tolerance_applied': validation_result.get('tolerance_applied', False)
+                'tolerance_applied': validation_result.get('tolerance_applied', False),
+                'smart_validation_used': smart_validation_used,
+                'distance_from_center': round(distance_from_center, 1)
             },
             'auto_checkin': auto_checkin,
             'timestamp': datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')
