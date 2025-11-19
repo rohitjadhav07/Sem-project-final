@@ -2,6 +2,11 @@
 
 {% block title %}Create Lecture - Enhanced Location{% endblock %}
 
+{% block head %}
+<script src="{{ url_for('static', filename='js/enhanced_gps.js') }}"></script>
+<script src="{{ url_for('static', filename='js/hybrid_location.js') }}"></script>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-12">
@@ -123,31 +128,37 @@
                                 <div class="form-text">Optional: Give this location a memorable name</div>
                             </div>
 
-                            <!-- Geofence Settings -->
+                            <!-- Rectangular Boundary Settings -->
+                            <div class="alert alert-info mb-3">
+                                <i class="fas fa-border-all"></i> <strong>Rectangular Boundary:</strong> Define your classroom's exact dimensions for precise attendance validation (10-20m accuracy).
+                            </div>
+                            
                             <div class="row">
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="mb-3">
-                                        <label for="geofence_radius" class="form-label">Geofence Radius (meters)</label>
-                                        <input type="range" class="form-range" id="geofence_radius" name="geofence_radius" 
-                                               min="5" max="100" value="20" oninput="updateRadiusDisplay(this.value)">
-                                        <div class="d-flex justify-content-between">
-                                            <small>5m</small>
-                                            <strong id="radiusDisplay">20m</strong>
-                                            <small>100m</small>
-                                        </div>
-                                        <div class="form-text">Students must be within this radius to mark attendance</div>
+                                        <label for="boundary_width" class="form-label">Classroom Width (meters) *</label>
+                                        <input type="number" class="form-control" id="boundary_width" name="boundary_width" 
+                                               min="10" max="100" value="30" required>
+                                        <div class="form-text">East-West dimension</div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="mb-3">
-                                        <label for="min_accuracy_required" class="form-label">Required GPS Accuracy (meters)</label>
-                                        <select class="form-select" id="min_accuracy_required" name="min_accuracy_required">
-                                            <option value="5">High Precision (≤5m)</option>
-                                            <option value="10">Good Precision (≤10m)</option>
-                                            <option value="20" selected>Standard Precision (≤20m)</option>
-                                            <option value="50">Low Precision (≤50m)</option>
+                                        <label for="boundary_height" class="form-label">Classroom Length (meters) *</label>
+                                        <input type="number" class="form-control" id="boundary_height" name="boundary_height" 
+                                               min="10" max="100" value="30" required>
+                                        <div class="form-text">North-South dimension</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="gps_accuracy_threshold" class="form-label">GPS Accuracy Threshold *</label>
+                                        <select class="form-select" id="gps_accuracy_threshold" name="gps_accuracy_threshold" required>
+                                            <option value="10">10m - High Precision</option>
+                                            <option value="15">15m - Standard</option>
+                                            <option value="20" selected>20m - Relaxed</option>
                                         </select>
-                                        <div class="form-text">Minimum GPS accuracy required for attendance</div>
+                                        <div class="form-text">Maximum acceptable GPS error</div>
                                     </div>
                                 </div>
                             </div>
@@ -314,22 +325,154 @@ function getCurrentLocation() {
 }
 
 function getHighAccuracyLocation() {
-    if (navigator.geolocation) {
-        showLocationStatus('Getting high accuracy location... Please wait and stay still.');
-        locationCaptureAttempts = 0;
-        bestAccuracy = null;
-        
-        const options = {
-            enableHighAccuracy: true,
-            timeout: 45000,
-            maximumAge: 0
-        };
-        
-        // Try multiple times to get the best accuracy
-        attemptHighAccuracyCapture(options, 3);
-    } else {
+    if (!navigator.geolocation) {
         alert('Geolocation is not supported by this browser.');
+        return;
     }
+    
+    showLocationStatus('🎯 Starting hybrid location system...');
+    locationCaptureAttempts = 0;
+    bestAccuracy = null;
+    
+    // Initialize hybrid location system
+    const hybridLocation = new HybridLocationSystem({
+        googleApiKey: '{{ config.GOOGLE_MAPS_API_KEY if config.GOOGLE_MAPS_API_KEY else "" }}',
+        targetAccuracy: 20,      // Target 20m accuracy
+        gpsTimeout: 30000,       // 30 second GPS timeout
+        googleTimeout: 10000     // 10 second Google API timeout
+    });
+    
+    // Start hybrid location acquisition
+    hybridLocation.getLocation(
+        // Success callback
+        (position) => {
+            const accuracy = Math.round(position.coords.accuracy);
+            const method = position.method;
+            
+            let methodName = 'GPS';
+            if (method === 'google_wifi') methodName = 'WiFi Positioning';
+            else if (method === 'gps_wifi') methodName = 'GPS + WiFi';
+            else if (method === 'gps_fallback') methodName = 'GPS (reduced accuracy)';
+            
+            if (position.lowAccuracy) {
+                showLocationWarning(`⚠️ Location captured with reduced accuracy: ±${accuracy}m (${methodName})`);
+                
+                // Show option to retry or use manual entry
+                const statusDiv = document.getElementById('locationStatus');
+                statusDiv.innerHTML += `
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-warning me-2" onclick="getHighAccuracyLocation()">
+                            <i class="fas fa-redo"></i> Retry
+                        </button>
+                        <button class="btn btn-sm btn-info" onclick="showManualEntry()">
+                            <i class="fas fa-edit"></i> Enter Manually
+                        </button>
+                    </div>
+                `;
+            } else {
+                showLocationSuccess(`✅ High accuracy location captured! ±${accuracy}m (${methodName})`);
+            }
+            
+            setLocationData(position, method);
+        },
+        
+        // Error callback
+        (error) => {
+            hideLocationStatus();
+            showLocationWarning('❌ Automatic positioning failed. Please enter location manually.');
+            showManualEntry();
+        },
+        
+        // Progress callback
+        (progress) => {
+            let icon = '🔄';
+            if (progress.stage === 'method1') icon = '🛰️';
+            else if (progress.stage === 'method2') icon = '📶';
+            else if (progress.stage === 'method3') icon = '⚠️';
+            else if (progress.stage === 'manual') icon = '✏️';
+            
+            showLocationStatus(`${icon} ${progress.message}`);
+        }
+    );
+}
+
+// Show manual location entry
+function showManualEntry() {
+    const statusDiv = document.getElementById('locationStatus');
+    statusDiv.innerHTML = `
+        <div class="manual-location-entry">
+            <h6>📍 Manual Location Entry</h6>
+            <p class="small text-muted">Automatic positioning failed. Please enter location manually:</p>
+            
+            <div class="mb-2">
+                <label class="form-label small">Enter Coordinates (from Google Maps)</label>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <input type="number" class="form-control form-control-sm" id="manualLat" 
+                               placeholder="Latitude" step="0.000001">
+                    </div>
+                    <div class="col-6">
+                        <input type="number" class="form-control form-control-sm" id="manualLng" 
+                               placeholder="Longitude" step="0.000001">
+                    </div>
+                </div>
+            </div>
+            
+            <button class="btn btn-success btn-sm" onclick="useManualCoordinates()">
+                <i class="fas fa-check"></i> Use These Coordinates
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="getHighAccuracyLocation()">
+                <i class="fas fa-redo"></i> Retry Auto
+            </button>
+            
+            <div class="alert alert-info mt-2 mb-0 small">
+                <strong>💡 How to get coordinates:</strong><br>
+                1. Open <a href="https://www.google.com/maps" target="_blank">Google Maps</a><br>
+                2. Right-click on your classroom location<br>
+                3. Click the coordinates to copy them<br>
+                4. Paste here
+            </div>
+        </div>
+    `;
+    statusDiv.className = 'alert alert-warning';
+    statusDiv.style.display = 'block';
+}
+
+// Use manually entered coordinates
+function useManualCoordinates() {
+    const lat = document.getElementById('manualLat').value;
+    const lng = document.getElementById('manualLng').value;
+    
+    if (!lat || !lng) {
+        alert('Please enter both latitude and longitude');
+        return;
+    }
+    
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+    
+    // Validate coordinates
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        alert('Invalid coordinates. Latitude must be between -90 and 90, longitude between -180 and 180.');
+        return;
+    }
+    
+    // Create position object
+    const position = {
+        coords: {
+            latitude: latitude,
+            longitude: longitude,
+            accuracy: 10, // Assume good accuracy for manual entry
+            altitude: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null
+        },
+        timestamp: Date.now()
+    };
+    
+    setLocationData(position, 'manual_entry');
+    showLocationSuccess(`✅ Manual coordinates set: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
 }
 
 function attemptHighAccuracyCapture(options, maxAttempts) {
@@ -558,10 +701,6 @@ function handleLocationError(error) {
             break;
     }
     alert(errorMessage);
-}
-
-function updateRadiusDisplay(value) {
-    document.getElementById('radiusDisplay').textContent = value + 'm';
 }
 
 function showLocationOnMap() {

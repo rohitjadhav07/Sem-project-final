@@ -35,10 +35,18 @@ def login():
             flash('Username and password are required', 'error')
             return render_template('auth/login.html')
         
-        # Find user by username or email
-        user = User.query.filter(
-            (User.username == username) | (User.email == username)
-        ).first()
+        # Find user by username or email with error handling
+        try:
+            user = User.query.filter(
+                (User.username == username) | (User.email == username)
+            ).first()
+        except Exception as e:
+            print(f"Database connection error during login: {e}")
+            if request.is_json:
+                return jsonify({'error': 'Database connection error. Please try again.'}), 500
+            else:
+                flash('Database connection error. Please try again in a moment.', 'error')
+                return render_template('auth/login.html')
         
         if user and user.check_password(password) and user.is_active:
             if request.is_json:

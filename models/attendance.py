@@ -23,6 +23,13 @@ class Attendance(db.Model):
     security_score = db.Column(db.Integer)  # Location security score (0-100)
     location_metadata = db.Column(db.Text)  # JSON string with location metadata
     
+    # Rectangular boundary validation metadata
+    validation_method = db.Column(db.String(50))  # 'rectangular', 'circular', 'tolerance_buffer'
+    distance_to_boundary_edge = db.Column(db.Float)  # Distance to nearest boundary edge (meters)
+    gps_accuracy_at_checkin = db.Column(db.Float)  # GPS accuracy when checked in
+    boundary_intersection_status = db.Column(db.String(50))  # 'inside', 'edge_tolerance', 'outside'
+    location_uncertainty_radius = db.Column(db.Float)  # GPS accuracy radius
+    
     # Security and audit fields
     client_ip = db.Column(db.String(45))  # IP address when marked
     verification_status = db.Column(db.String(20), default='verified')  # verified, suspicious, flagged

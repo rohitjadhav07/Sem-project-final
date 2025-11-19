@@ -96,43 +96,45 @@
             </div>
             <div class="card-body">
                 {% if recent_attendance %}
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Course</th>
-                                    <th>Lecture</th>
-                                    <th>Date</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for attendance in recent_attendance %}
-                                <tr>
-                                    <td>{{ attendance.lecture.course.code }}</td>
-                                    <td>{{ attendance.lecture.title }}</td>
-                                    <td>
-                                        {% if attendance.marked_at %}
-                                            {{ attendance.marked_at.strftime('%Y-%m-%d %H:%M') }}
-                                            {% if attendance.distance_from_lecture %}
-                                                <br><small class="text-muted">Distance: {{ "%.1f"|format(attendance.distance_from_lecture) }}m</small>
-                                            {% endif %}
-                                        {% else %}
-                                            N/A
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-{{ 'success' if attendance.status == 'present' else 'danger' if attendance.status == 'absent' else 'warning' }}">
-                                            {{ attendance.status.title() }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Course</th>
+                                <th>Lecture</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for attendance in recent_attendance %}
+                            <tr>
+                                <td>{{ attendance.lecture.course.code }}</td>
+                                <td>{{ attendance.lecture.title }}</td>
+                                <td>
+                                    {% if attendance.marked_at %}
+                                    {{ attendance.marked_at.strftime('%Y-%m-%d %H:%M') }}
+                                    {% if attendance.distance_from_lecture %}
+                                    <br><small class="text-muted">Distance: {{
+                                        "%.1f"|format(attendance.distance_from_lecture) }}m</small>
+                                    {% endif %}
+                                    {% else %}
+                                    N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span
+                                        class="badge bg-{{ 'success' if attendance.status == 'present' else 'danger' if attendance.status == 'absent' else 'warning' }}">
+                                        {{ attendance.status.title() }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
                 {% else %}
-                    <p class="text-muted">No recent attendance records found.</p>
+                <p class="text-muted">No recent attendance records found.</p>
                 {% endif %}
             </div>
         </div>
@@ -141,91 +143,117 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/enhanced_gps.js') }}"></script>
 <script>
-// Simple automatic attendance system
-let currentUserLocation = null;
-let activeLectures = [];
-let checkedInLectures = new Set();
+    // Enhanced automatic attendance system with improved GPS accuracy
+    let currentUserLocation = null;
+    let activeLectures = [];
+    let checkedInLectures = new Set();
+    let enhancedGPS = null;
+    let gpsKalmanFilter = null;
 
-// Start everything when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Starting simple automatic attendance...');
-    
-    // Get lectures and start location tracking
-    refreshLectures();
-    startLocationTracking();
-    
-    // Update every 5 seconds
-    setInterval(() => {
+    // Start everything when page loads
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('🚀 Starting enhanced automatic attendance with improved GPS...');
+
+        // Initialize Kalman filter for smoothing
+        gpsKalmanFilter = new GPSKalmanFilter(0.001, 10);
+
+        // Get lectures
         refreshLectures();
-        updateLocationAndDistance();
-    }, 5000);
-});
+        
+        // Start enhanced GPS tracking
+        startEnhancedLocationTracking();
 
-function refreshLectures() {
-    fetch('/student/api/active-lectures')
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            activeLectures = data.lectures || [];
-            document.getElementById('activeLecturesCount').textContent = data.count;
-            displayLectures(activeLectures);
-        }
-    })
-    .catch(error => {
-        console.error('Error loading lectures:', error);
+        // Update every 5 seconds
+        setInterval(() => {
+            refreshLectures();
+            updateLocationAndDistance();
+        }, 5000);
     });
-}
 
-function displayLectures(lectures) {
-    const container = document.getElementById('activeLectures');
-    
-    if (lectures.length === 0) {
-        container.innerHTML = '<div class="alert alert-info text-center">No active lectures at the moment.</div>';
-        return;
+    function refreshLectures() {
+        fetch('/student/api/active-lectures')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    activeLectures = data.lectures || [];
+                    document.getElementById('activeLecturesCount').textContent = data.count;
+                    displayLectures(activeLectures);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading lectures:', error);
+            });
     }
-    
-    let html = '<div class="row">';
-    lectures.forEach(lecture => {
-        const startTime = new Date(lecture.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true});
-        const endTime = new Date(lecture.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true});
-        
-        // Calculate distance if we have location
-        let distanceInfo = '';
-        let statusColor = 'secondary';
-        let actionButton = '';
-        
-        if (currentUserLocation && lecture.location) {
-            const distance = calculateDistance(
-                currentUserLocation.coords.latitude,
-                currentUserLocation.coords.longitude,
-                lecture.location.latitude,
-                lecture.location.longitude
-            );
-            
-            const radius = lecture.location.radius || 50;
-            const isWithinRange = distance <= radius;
-            
-            distanceInfo = `
+
+    function displayLectures(lectures) {
+        const container = document.getElementById('activeLectures');
+
+        if (lectures.length === 0) {
+            container.innerHTML = '<div class="alert alert-info text-center">No active lectures at the moment.</div>';
+            return;
+        }
+
+        let html = '<div class="row">';
+        lectures.forEach(lecture => {
+            const startTime = new Date(lecture.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+            const endTime = new Date(lecture.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+            // Calculate distance if we have location
+            let distanceInfo = '';
+            let statusColor = 'secondary';
+            let actionButton = '';
+
+            if (currentUserLocation && lecture.location) {
+                const distance = calculateDistance(
+                    currentUserLocation.coords.latitude,
+                    currentUserLocation.coords.longitude,
+                    lecture.location.latitude,
+                    lecture.location.longitude
+                );
+
+                // Check if lecture uses rectangular boundary
+                const geofenceType = lecture.geofence_type || 'circular';
+                let isWithinRange = false;
+                let boundaryInfo = '';
+
+                if (geofenceType === 'rectangular' && lecture.boundary) {
+                    // Use rectangular boundary validation
+                    isWithinRange = isPointInRectangle(
+                        currentUserLocation.coords.latitude,
+                        currentUserLocation.coords.longitude,
+                        lecture.boundary
+                    );
+                    const area = lecture.boundary_area_sqm || 0;
+                    boundaryInfo = `Rectangular (${Math.round(Math.sqrt(area))}m × ${Math.round(Math.sqrt(area))}m)`;
+                } else {
+                    // Use circular validation (fallback)
+                    const radius = lecture.location.radius || 50;
+                    isWithinRange = distance <= radius;
+                    boundaryInfo = `Circular (${radius}m radius)`;
+                }
+
+                distanceInfo = `
                 <div class="mt-2 p-2 rounded ${isWithinRange ? 'bg-success bg-opacity-10' : 'bg-warning bg-opacity-10'}">
                     <small>
-                        <i class="fas fa-map-marker-alt"></i> Distance: <strong>${Math.round(distance)}m</strong> 
-                        (Required: ${radius}m)
+                        <i class="fas fa-map-marker-alt"></i> Distance: <strong>${Math.round(distance)}m</strong><br>
+                        <i class="fas fa-border-all"></i> Boundary: ${boundaryInfo}
                         ${isWithinRange ? '<i class="fas fa-check text-success ms-1"></i>' : '<i class="fas fa-times text-warning ms-1"></i>'}
                     </small>
                 </div>
             `;
-            
-            statusColor = isWithinRange ? 'success' : 'warning';
-            
-            if (isWithinRange && !checkedInLectures.has(lecture.id)) {
-                actionButton = `<button class="btn btn-success btn-sm mt-2" onclick="autoCheckIn(${lecture.id})">
+
+                statusColor = isWithinRange ? 'success' : 'warning';
+
+                if (isWithinRange && !checkedInLectures.has(lecture.id)) {
+                    actionButton = `<button class="btn btn-success btn-sm mt-2" onclick="autoCheckIn(${lecture.id})">
                     <i class="fas fa-check"></i> Auto Check-In Available
                 </button>`;
+                }
             }
-        }
-        
-        html += `
+
+            html += `
             <div class="col-md-6 mb-3">
                 <div class="card border-${statusColor}">
                     <div class="card-body">
@@ -241,134 +269,209 @@ function displayLectures(lectures) {
                 </div>
             </div>
         `;
-    });
-    html += '</div>';
-    
-    container.innerHTML = html;
-}
+        });
+        html += '</div>';
 
-// Simple location tracking
-function startLocationTracking() {
-    if (!navigator.geolocation) {
-        console.log('Geolocation not supported');
-        return;
+        container.innerHTML = html;
     }
-    
-    // Get location immediately
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            currentUserLocation = position;
-            console.log('Location obtained:', Math.round(position.coords.latitude * 10000) / 10000, Math.round(position.coords.longitude * 10000) / 10000);
-            updateLocationAndDistance();
-        },
-        (error) => {
-            console.log('Location error, will retry...');
-        },
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-    );
-    
-    // Watch location continuously
-    navigator.geolocation.watchPosition(
-        (position) => {
-            currentUserLocation = position;
-            updateLocationAndDistance();
-        },
-        (error) => {
-            // Silently handle errors
-        },
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 30000 }
-    );
-}
 
-function updateLocationAndDistance() {
-    if (!currentUserLocation || activeLectures.length === 0) return;
-    
-    // Check each lecture for auto check-in
-    activeLectures.forEach(lecture => {
-        if (checkedInLectures.has(lecture.id)) return;
-        
-        const distance = calculateDistance(
-            currentUserLocation.coords.latitude,
-            currentUserLocation.coords.longitude,
-            lecture.location.latitude,
-            lecture.location.longitude
+    // Enhanced location tracking with multiple readings and averaging
+    function startEnhancedLocationTracking() {
+        if (!navigator.geolocation) {
+            console.log('Geolocation not supported');
+            showNotification('⚠️ GPS not supported on this device', 'warning');
+            return;
+        }
+
+        // Initialize enhanced GPS with optimal settings
+        enhancedGPS = new EnhancedGPS({
+            warmupReadings: 5,           // Collect 5 readings during warm-up
+            warmupTimeout: 30000,        // 30 second warm-up timeout
+            minAccuracy: 20,             // Minimum acceptable accuracy (20m)
+            enableHighAccuracy: true,    // Use high accuracy mode
+            averageReadings: 3,          // Average last 3 readings
+            maxAge: 5000                 // Max age of cached position (5 seconds)
+        });
+
+        // Set warm-up complete callback
+        enhancedGPS.callbacks.onWarmupComplete = (position) => {
+            console.log('✅ GPS warm-up complete! Accuracy: ±' + Math.round(position.coords.accuracy) + 'm');
+            showNotification('📍 GPS ready with ±' + Math.round(position.coords.accuracy) + 'm accuracy', 'success');
+        };
+
+        // Start tracking
+        enhancedGPS.start(
+            (position) => {
+                // Apply Kalman filtering for additional smoothing
+                const filtered = gpsKalmanFilter.filter(
+                    position.coords.latitude,
+                    position.coords.longitude,
+                    position.coords.accuracy
+                );
+
+                // Update position with filtered coordinates
+                currentUserLocation = {
+                    coords: {
+                        ...position.coords,
+                        latitude: filtered.latitude,
+                        longitude: filtered.longitude
+                    },
+                    timestamp: position.timestamp,
+                    averaged: position.averaged,
+                    filtered: true
+                };
+
+                // Log accuracy improvements
+                if (position.averaged) {
+                    console.log('📍 Enhanced GPS update: ±' + Math.round(position.coords.accuracy) + 'm ' +
+                              '(averaged from ' + position.readingCount + ' readings, Kalman filtered)');
+                }
+
+                updateLocationAndDistance();
+            },
+            (error) => {
+                console.error('GPS error:', error);
+                showNotification('⚠️ GPS error: ' + error.message, 'warning');
+            }
         );
-        
-        const radius = lecture.location.radius || 50;
-        
-        // Auto check-in if within range
-        if (distance <= radius) {
-            console.log(`Auto check-in triggered for ${lecture.title} - Distance: ${Math.round(distance)}m`);
-            performAutoCheckIn(lecture.id);
+
+        // Show GPS status every 30 seconds
+        setInterval(() => {
+            if (enhancedGPS) {
+                const status = enhancedGPS.getStatus();
+                console.log('📊 GPS Status:', status);
+            }
+        }, 30000);
+    }
+
+    function updateLocationAndDistance() {
+        if (!currentUserLocation || activeLectures.length === 0) return;
+
+        // Check each lecture for auto check-in
+        activeLectures.forEach(lecture => {
+            if (checkedInLectures.has(lecture.id)) return;
+
+            const geofenceType = lecture.geofence_type || 'circular';
+            let isWithinRange = false;
+
+            if (geofenceType === 'rectangular' && lecture.boundary) {
+                // Use rectangular boundary validation
+                isWithinRange = isPointInRectangle(
+                    currentUserLocation.coords.latitude,
+                    currentUserLocation.coords.longitude,
+                    lecture.boundary
+                );
+            } else {
+                // Use circular validation (fallback)
+                const distance = calculateDistance(
+                    currentUserLocation.coords.latitude,
+                    currentUserLocation.coords.longitude,
+                    lecture.location.latitude,
+                    lecture.location.longitude
+                );
+                const radius = lecture.location.radius || 50;
+                isWithinRange = distance <= radius;
+            }
+
+            // Auto check-in if within range
+            if (isWithinRange) {
+                console.log(`Auto check-in triggered for ${lecture.title} - Within ${geofenceType} boundary`);
+                performAutoCheckIn(lecture.id);
+            }
+        });
+
+        // Refresh display to show updated distances
+        displayLectures(activeLectures);
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371000; // Earth's radius in meters
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    function isPointInRectangle(lat, lon, boundary) {
+        // Ray casting algorithm for point-in-polygon
+        // boundary has corners: {ne: [lat, lon], nw: [...], se: [...], sw: [...]}
+        if (!boundary || !boundary.corners) return false;
+
+        const corners = boundary.corners;
+        const polygon = [
+            corners.nw,
+            corners.ne,
+            corners.se,
+            corners.sw
+        ];
+
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const xi = polygon[i][1], yi = polygon[i][0];
+            const xj = polygon[j][1], yj = polygon[j][0];
+
+            const intersect = ((yi > lat) !== (yj > lat))
+                && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
         }
-    });
-    
-    // Refresh display to show updated distances
-    displayLectures(activeLectures);
-}
 
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // Earth's radius in meters
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
+        return inside;
+    }
 
-function autoCheckIn(lectureId) {
-    performAutoCheckIn(lectureId);
-}
+    function autoCheckIn(lectureId) {
+        performAutoCheckIn(lectureId);
+    }
 
-function performAutoCheckIn(lectureId) {
-    if (!currentUserLocation) return;
-    
-    checkedInLectures.add(lectureId);
-    
-    fetch('/student/api/checkin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            lecture_id: lectureId,
-            latitude: currentUserLocation.coords.latitude,
-            longitude: currentUserLocation.coords.longitude,
-            auto_checkin: true
+    function performAutoCheckIn(lectureId) {
+        if (!currentUserLocation) return;
+
+        checkedInLectures.add(lectureId);
+
+        fetch('/student/api/checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                lecture_id: lectureId,
+                latitude: currentUserLocation.coords.latitude,
+                longitude: currentUserLocation.coords.longitude,
+                auto_checkin: true
+            })
         })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showNotification(`✅ Checked in successfully! Distance: ${Math.round(data.distance)}m`, 'success');
-            refreshLectures(); // Refresh to update display
-        } else {
-            checkedInLectures.delete(lectureId); // Allow retry
-            console.error('Check-in failed:', data.message);
-        }
-    })
-    .catch(error => {
-        checkedInLectures.delete(lectureId); // Allow retry
-        console.error('Check-in error:', error);
-    });
-}
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(`✅ Checked in successfully! Distance: ${Math.round(data.distance)}m`, 'success');
+                    refreshLectures(); // Refresh to update display
+                } else {
+                    checkedInLectures.delete(lectureId); // Allow retry
+                    console.error('Check-in failed:', data.message);
+                }
+            })
+            .catch(error => {
+                checkedInLectures.delete(lectureId); // Allow retry
+                console.error('Check-in error:', error);
+            });
+    }
 
-function showNotification(message, type) {
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
-    notification.innerHTML = `
+    function showNotification(message, type) {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
+        notification.innerHTML = `
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.remove();
-        }
-    }, 5000);
-}
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 5000);
+    }
 </script>
 {% endblock %}

@@ -86,12 +86,9 @@ def create_app(config_name=None):
         except Exception as e:
             return f"Location test page not available: {e}"
     
-    # Initialize database tables and sample data
-    with app.app_context():
-        max_retries = 3
-        retry_count = 0
-        
-        while retry_count < max_retries:
+    # Initialize database tables and sample data (only in development)
+    if app.config.get('DEBUG', False):
+        with app.app_context():
             try:
                 # Test database connection first
                 from sqlalchemy import text
@@ -102,23 +99,12 @@ def create_app(config_name=None):
                 from init_sample_data import init_sample_data
                 init_sample_data()
                 print("✅ Database initialized with sample data")
-                break  # Success, exit retry loop
                 
             except Exception as e:
-                retry_count += 1
-                print(f"⚠️ Database connection attempt {retry_count}/{max_retries} failed: {e}")
-                
-                if retry_count >= max_retries:
-                    print("❌ Max retries reached. Running without database initialization.")
-                    # In production, continue without database initialization
-                    if not app.config.get('DEBUG', False):
-                        print("⚠️ Running in production mode without database initialization")
-                        break
-                    else:
-                        print("❌ Development mode: Database connection required")
-                else:
-                    import time
-                    time.sleep(2)  # Wait 2 seconds before retry
+                print(f"⚠️ Database initialization error: {e}")
+                print("⚠️ Continuing without database initialization")
+    else:
+        print("⚠️ Production mode: Skipping database initialization")
     
     return app
 

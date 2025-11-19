@@ -36,6 +36,9 @@ class Config:
     DEFAULT_GEOFENCE_RADIUS = int(os.environ.get('DEFAULT_GEOFENCE_RADIUS') or 50)  # meters
     LOCATION_CONFIRMATIONS_REQUIRED = int(os.environ.get('LOCATION_CONFIRMATIONS_REQUIRED') or 3)
     
+    # Google Maps API Key (for WiFi positioning)
+    GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY') or ''
+    
     @staticmethod
     def init_app(app):
         pass
@@ -62,35 +65,30 @@ class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     
-    # Use Supabase PostgreSQL database with multiple fallback options
+    # Use Supabase PostgreSQL database with fallback options
     database_url = os.environ.get('DATABASE_URL') or os.environ.get('SUPABASE_DATABASE_URL')
     
-    # If no URL provided, construct one from individual components
+    # If no URL provided, use direct connection (more reliable than pooler)
     if not database_url:
-        # Use Supabase connection pooler for better reliability
         supabase_project = 'kkdnmzfcjckukxszfbgc'
         supabase_password = 'Finalproject1234'
-        
-        # Try multiple pooler endpoints for better reliability
-        pooler_endpoints = [
-            f'postgresql://postgres.{supabase_project}:{supabase_password}@aws-1-ap-south-1.pooler.supabase.com:5432/postgres',
-            f'postgresql://postgres.{supabase_project}:{supabase_password}@aws-1-ap-south-1.pooler.supabase.com:6543/postgres',
-        ]
-        
-        # Use the first endpoint as default
-        database_url = pooler_endpoints[0]
+        # Use direct connection instead of pooler for better reliability
+        database_url = f'postgresql://postgres:{supabase_password}@db.{supabase_project}.supabase.co:5432/postgres'
     
     # Handle Vercel's postgres:// URL format (convert to postgresql://)
     if database_url and database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
     
-    # Clean up URL and add SSL parameters if not already present
+    # Add connection parameters for reliability
     if database_url:
-        database_url = database_url.strip()  # Remove any whitespace
+        database_url = database_url.strip()
         if '?' not in database_url:
-            database_url += '?sslmode=require'
-        elif 'sslmode' not in database_url:
-            database_url += '&sslmode=require'
+            database_url += '?sslmode=require&connect_timeout=10'
+        else:
+            if 'sslmode' not in database_url:
+                database_url += '&sslmode=require'
+            if 'connect_timeout' not in database_url:
+                database_url += '&connect_timeout=10'
     
     SQLALCHEMY_DATABASE_URI = database_url
     
@@ -151,20 +149,17 @@ class HerokuConfig(ProductionConfig):
 class VercelConfig(ProductionConfig):
     """Vercel-specific configuration"""
     
-    # Override database settings for Vercel
+    # Optimized database settings for Vercel serverless
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_pre_ping': True,
-        'pool_recycle': 300,
-        'pool_timeout': 60,
-        'max_overflow': 10,
-        'pool_size': 5,
+        'pool_recycle': 60,        # Shorter recycle time for serverless
+        'pool_timeout': 30,        # Shorter timeout
+        'max_overflow': 0,         # No overflow for serverless
+        'pool_size': 1,            # Single connection for serverless
         'connect_args': {
-            'connect_timeout': 60,
+            'connect_timeout': 10,
             'application_name': 'geo_attendance_vercel',
-            'target_session_attrs': 'read-write',
-            'keepalives_idle': 600,
-            'keepalives_interval': 30,
-            'keepalives_count': 3
+            'target_session_attrs': 'read-write'
         }
     }
     

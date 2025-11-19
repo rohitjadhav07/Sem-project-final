@@ -1,0 +1,219 @@
+/* Boundary Editor Styles */
+
+#boundary-map {
+    height: 500px;
+    width: 100%;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.corner-marker {
+    background: #007bff;
+    color: white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 10px;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.corner-marker-draggable {
+    cursor: move;
+}
+
+.corner-handle {
+    background: #28a745;
+    color: white;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 12px;
+    border: 3px solid white;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+    cursor: grab;
+}
+
+.corner-handle:active {
+    cursor: grabbing;
+}
+
+.corner-label {
+    background: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 11px;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+#boundary-measurements {
+    margin-top: 20px;
+}
+
+#boundary-validation {
+    margin-top: 15px;
+}
+
+#walk-perimeter-instructions {
+    margin-bottom: 20px;
+}
+
+#mark-corner-button {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.boundary-controls {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.boundary-controls .form-group {
+    margin-bottom: 15px;
+}
+
+.boundary-controls label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.geofence-type-selector {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.geofence-type-option {
+    flex: 1;
+    padding: 20px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: center;
+}
+
+.geofence-type-option:hover {
+    border-color: #007bff;
+    background: #f8f9fa;
+}
+
+.geofence-type-option.active {
+    border-color: #007bff;
+    background: #e7f3ff;
+}
+
+.geofence-type-option i {
+    font-size: 32px;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.geofence-type-option h5 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.geofence-type-option p {
+    margin: 5px 0 0 0;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.boundary-mode-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.boundary-mode-buttons .btn {
+    flex: 1;
+}
+
+#conversion-comparison {
+    margin-top: 20px;
+}
+
+#conversion-actions {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.gps-threshold-selector {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.gps-threshold-option {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.gps-threshold-option:hover {
+    border-color: #007bff;
+}
+
+.gps-threshold-option.active {
+    border-color: #007bff;
+    background: #e7f3ff;
+    font-weight: bold;
+}
+
+.gps-threshold-option .value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #007bff;
+}
+
+.gps-threshold-option .label {
+    font-size: 11px;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+    font-family: inherit;
+}
+
+.leaflet-popup-content {
+    margin: 10px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    #boundary-map {
+        height: 400px;
+    }
+    
+    .geofence-type-selector {
+        flex-direction: column;
+    }
+    
+    .boundary-mode-buttons {
+        flex-direction: column;
+    }
+    
+    .gps-threshold-selector {
+        flex-direction: column;
+    }
+}

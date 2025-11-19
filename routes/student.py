@@ -233,24 +233,37 @@ def active_lectures():
 @login_required
 @student_required
 def api_checkin():
-    """GPS-based student check-in with location validation"""
+    """Enhanced GPS-based student check-in with rectangular boundary support"""
     try:
         data = request.get_json()
         lecture_id = data.get('lecture_id')
         student_lat = data.get('latitude')
         student_lon = data.get('longitude')
-        auto_checkin = data.get('auto_checkin', False)  # Flag for automatic check-in
+        auto_checkin = data.get('auto_checkin', False)
+        
+        # Extract GPS metadata
+        metadata = data.get('metadata', {})
+        gps_accuracy = metadata.get('accuracy', 999)
         
         if not all([lecture_id, student_lat, student_lon]):
-            return jsonify({'success': False, 'message': 'Missing required location data'})
+            return jsonify({
+                'success': False,
+                'message': 'Missing required location data'
+            })
         
         lecture = Lecture.query.get(lecture_id)
         if not lecture:
-            return jsonify({'success': False, 'message': 'Lecture not found'})
+            return jsonify({
+                'success': False,
+                'message': 'Lecture not found'
+            })
         
         # Validate lecture has location set
         if not lecture.latitude or not lecture.longitude:
-            return jsonify({'success': False, 'message': 'Lecture location not configured'})
+            return jsonify({
+                'success': False,
+                'message': 'Lecture location not configured'
+            })
         
         # Check if student is enrolled
         enrollment = Enrollment.query.filter_by(
@@ -260,7 +273,10 @@ def api_checkin():
         ).first()
         
         if not enrollment:
-            return jsonify({'success': False, 'message': 'You are not enrolled in this course'})
+            return jsonify({
+                'success': False,
+                'message': 'You are not enrolled in this course'
+            })
         
         # Check if already marked
         existing = Attendance.query.filter_by(
@@ -269,46 +285,83 @@ def api_checkin():
         ).first()
         
         if existing:
-            return jsonify({'success': False, 'message': 'Attendance already marked for this lecture'})
+            return jsonify({
+                'success': False,
+                'message': 'Attendance already marked for this lecture'
+            })
         
-        # Calculate distance using simple formula
+        # Validate GPS accuracy against threshold
+        gps_threshold = lecture.gps_accuracy_threshold or 20
+        if gps_accuracy > gps_threshold:
+            return jsonify({
+                'success': False,
+                'message': f'GPS accuracy too low: {gps_accuracy:.1f}m (required: ≤{gps_threshold}m)',
+                'validation': {
+                    'gps_accuracy_acceptable': False,
+                    'required_accuracy': gps_threshold,
+                    'current_accuracy': gps_accuracy
+                },
+                'guidance': 'Move to an area with better GPS signal (outdoors or near windows)'
+            })
+        
+        # Use enhanced geofence validation (supports both circular and rectangular)
+        validation_result = lecture.is_within_geofence_enhanced(
+            float(student_lat),
+            float(student_lon),
+            gps_accuracy
+        )
+        
+        if not validation_result['within_geofence']:
+            # Build error response based on validation method
+            error_response = {
+                'success': False,
+                'validation': {
+                    'method': validation_result['method'],
+                    'inside_boundary': False,
+                    'gps_accuracy_acceptable': True
+                }
+            }
+            
+            if validation_result['method'] == 'rectangular':
+                distance_to_edge = validation_result.get('distance_to_edge', 0)
+                nearest_edge = validation_result.get('details', {}).get('nearest_edge', 'boundary')
+                
+                error_response['message'] = f'You are outside the classroom boundary ({distance_to_edge:.1f}m from {nearest_edge} edge)'
+                error_response['validation']['distance_to_edge'] = round(distance_to_edge, 1)
+                error_response['validation']['nearest_edge'] = nearest_edge
+                error_response['guidance'] = f'Move closer to the classroom (approximately {distance_to_edge:.1f}m toward {nearest_edge})'
+            else:
+                # Circular validation
+                distance = validation_result.get('distance', 0)
+                radius = validation_result.get('radius', 50)
+                
+                error_response['message'] = f'You are {distance:.1f}m away from the lecture location. Required: within {radius}m'
+                error_response['validation']['distance'] = round(distance, 1)
+                error_response['validation']['required_radius'] = radius
+                error_response['guidance'] = f'Move {distance - radius:.1f}m closer to the lecture location'
+            
+            return jsonify(error_response)
+        
+        # Calculate distance for attendance record
         import math
-        
         def calculate_distance(lat1, lon1, lat2, lon2):
-            """Calculate distance between two points in meters"""
-            R = 6371000  # Earth's radius in meters
+            R = 6371000
             lat1_rad = math.radians(lat1)
             lat2_rad = math.radians(lat2)
             delta_lat = math.radians(lat2 - lat1)
             delta_lon = math.radians(lon2 - lon1)
-            
             a = (math.sin(delta_lat/2) * math.sin(delta_lat/2) +
                  math.cos(lat1_rad) * math.cos(lat2_rad) *
                  math.sin(delta_lon/2) * math.sin(delta_lon/2))
             c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-            
             return R * c
         
-        # Calculate distance between student and lecture location
-        distance = calculate_distance(
+        distance_from_center = calculate_distance(
             float(student_lat), float(student_lon),
             float(lecture.latitude), float(lecture.longitude)
         )
         
-        # Check if within geofence
-        geofence_radius = lecture.geofence_radius or 50  # Default 50 meters
-        
-        if distance > geofence_radius:
-            return jsonify({
-                'success': False, 
-                'message': f'You are {distance:.1f}m away from the lecture location. Required: within {geofence_radius}m',
-                'distance': round(distance, 1),
-                'required_radius': geofence_radius,
-                'student_location': {'lat': student_lat, 'lon': student_lon},
-                'lecture_location': {'lat': lecture.latitude, 'lon': lecture.longitude}
-            })
-        
-        # Mark attendance
+        # Mark attendance with enhanced metadata
         attendance = Attendance(
             student_id=current_user.id,
             lecture_id=lecture_id,
@@ -316,27 +369,46 @@ def api_checkin():
             marked_at=datetime.now(IST),
             student_latitude=float(student_lat),
             student_longitude=float(student_lon),
-            distance_from_lecture=distance,
-            notes=f"Auto check-in: {distance:.1f}m from lecture" if auto_checkin else None
+            distance_from_lecture=distance_from_center,
+            # Enhanced rectangular boundary metadata
+            validation_method=validation_result['method'],
+            distance_to_boundary_edge=validation_result.get('distance_to_edge', 0),
+            gps_accuracy_at_checkin=gps_accuracy,
+            boundary_intersection_status='inside' if validation_result['within_geofence'] else 'outside',
+            location_uncertainty_radius=gps_accuracy,
+            notes=f"{'Auto-' if auto_checkin else ''}Check-in via {validation_result['method']} validation"
         )
         
         db.session.add(attendance)
         db.session.commit()
         
-        success_message = f"{'Auto-' if auto_checkin else ''}Attendance marked successfully! You were {distance:.1f}m from the lecture location."
-        
-        return jsonify({
-            'success': True, 
-            'message': success_message,
-            'distance': round(distance, 1),
-            'required_radius': geofence_radius,
+        # Build success response
+        success_response = {
+            'success': True,
+            'message': f"{'Auto-' if auto_checkin else ''}Attendance marked successfully!",
+            'validation': {
+                'method': validation_result['method'],
+                'inside_boundary': True,
+                'gps_accuracy_acceptable': True,
+                'tolerance_applied': validation_result.get('tolerance_applied', False)
+            },
             'auto_checkin': auto_checkin,
             'timestamp': datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S IST')
-        })
+        }
+        
+        if validation_result['method'] == 'rectangular':
+            success_response['validation']['distance_to_edge'] = round(validation_result.get('distance_to_edge', 0), 1)
+        else:
+            success_response['distance'] = round(distance_from_center, 1)
+        
+        return jsonify(success_response)
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
+        return jsonify({
+            'success': False,
+            'message': f'Error: {str(e)}'
+        })
 
 @student_bp.route('/enroll')
 @login_required
@@ -693,20 +765,35 @@ def api_active_lectures():
                 if end_time.tzinfo is None:
                     end_time = end_time.replace(tzinfo=IST)
                 
-                available_lectures.append({
+                lecture_data = {
                     'id': lecture.id,
                     'title': lecture.title,
                     'course_code': lecture.course.code,
                     'course_name': lecture.course.name,
                     'start_time': start_time.isoformat(),
                     'end_time': end_time.isoformat(),
+                    'geofence_type': lecture.geofence_type or 'circular',
                     'location': {
                         'latitude': lecture.latitude,
                         'longitude': lecture.longitude,
                         'radius': lecture.geofence_radius,
                         'name': lecture.location_name
                     }
-                })
+                }
+                
+                # Add rectangular boundary data if applicable
+                if lecture.geofence_type == 'rectangular' and lecture.boundary_coordinates:
+                    import json
+                    try:
+                        boundary_data = json.loads(lecture.boundary_coordinates)
+                        lecture_data['boundary'] = boundary_data
+                        lecture_data['boundary_area_sqm'] = lecture.boundary_area_sqm
+                        lecture_data['boundary_perimeter_m'] = lecture.boundary_perimeter_m
+                        lecture_data['gps_accuracy_threshold'] = lecture.gps_accuracy_threshold
+                    except:
+                        pass
+                
+                available_lectures.append(lecture_data)
         
         return jsonify({
             'success': True,
@@ -724,3 +811,92 @@ def api_active_lectures():
             'lectures': [],
             'count': 0
         })
+
+@student_bp.route('/api/lecture/<int:lecture_id>/boundary-status', methods=['GET'])
+@login_required
+@student_required
+def check_boundary_status(lecture_id):
+    """
+    Check if student is within boundary without marking attendance
+    
+    GET /student/api/lecture/<id>/boundary-status?lat=40.7128&lon=-74.0060&accuracy=10
+    """
+    try:
+        lecture = Lecture.query.get(lecture_id)
+        
+        if not lecture:
+            return jsonify({
+                'success': False,
+                'error': 'Lecture not found'
+            }), 404
+        
+        # Check enrollment
+        enrollment = Enrollment.query.filter_by(
+            student_id=current_user.id,
+            course_id=lecture.course_id,
+            is_active=True
+        ).first()
+        
+        if not enrollment:
+            return jsonify({
+                'success': False,
+                'error': 'Not enrolled in this course'
+            }), 403
+        
+        # Get location from query parameters
+        student_lat = request.args.get('lat', type=float)
+        student_lon = request.args.get('lon', type=float)
+        gps_accuracy = request.args.get('accuracy', type=float, default=999)
+        
+        if not student_lat or not student_lon:
+            return jsonify({
+                'success': False,
+                'error': 'Missing location parameters'
+            }), 400
+        
+        # Validate GPS accuracy
+        gps_threshold = lecture.gps_accuracy_threshold or 20
+        gps_acceptable = gps_accuracy <= gps_threshold
+        
+        # Check boundary status
+        validation_result = lecture.is_within_geofence_enhanced(
+            student_lat,
+            student_lon,
+            gps_accuracy
+        )
+        
+        response = {
+            'success': True,
+            'lecture_id': lecture_id,
+            'geofence_type': lecture.geofence_type or 'circular',
+            'student_location': {
+                'lat': student_lat,
+                'lon': student_lon,
+                'accuracy': gps_accuracy
+            },
+            'boundary_status': {
+                'inside': validation_result['within_geofence'],
+                'can_checkin': validation_result['within_geofence'] and gps_acceptable,
+                'method': validation_result['method']
+            },
+            'requirements': {
+                'gps_accuracy_threshold': gps_threshold,
+                'current_gps_accuracy': gps_accuracy,
+                'meets_requirements': gps_acceptable
+            }
+        }
+        
+        if validation_result['method'] == 'rectangular':
+            response['boundary_status']['distance_to_edge'] = round(validation_result.get('distance_to_edge', 0), 1)
+            response['boundary_status']['tolerance_applied'] = validation_result.get('tolerance_applied', False)
+        else:
+            response['boundary_status']['distance'] = round(validation_result.get('distance', 0), 1)
+            response['boundary_status']['radius'] = validation_result.get('radius', 50)
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }), 500

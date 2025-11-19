@@ -20,6 +20,19 @@ class Lecture(db.Model):
     location_name = db.Column(db.String(200))
     geofence_radius = db.Column(db.Integer, default=50)  # meters
     
+    # Rectangular boundary support
+    geofence_type = db.Column(db.String(20), default='circular')  # 'circular' or 'rectangular'
+    boundary_coordinates = db.Column(db.Text)  # JSON: {"ne": [lat, lon], "nw": [...], "se": [...], "sw": [...]}
+    boundary_area_sqm = db.Column(db.Float)  # Area in square meters
+    boundary_perimeter_m = db.Column(db.Float)  # Perimeter in meters
+    boundary_center_lat = db.Column(db.Float(precision=10))  # Calculated center point
+    boundary_center_lon = db.Column(db.Float(precision=10))
+    gps_accuracy_threshold = db.Column(db.Integer, default=20)  # meters (10, 15, or 20)
+    boundary_tolerance_m = db.Column(db.Float, default=2.0)  # Edge tolerance in meters
+    boundary_validation_method = db.Column(db.String(50))  # 'point_in_polygon', 'circular', etc.
+    boundary_created_at = db.Column(db.DateTime)
+    boundary_last_modified = db.Column(db.DateTime)
+    
     # Location security and precision
     location_accuracy = db.Column(db.Float)  # GPS accuracy in meters when location was set
     location_metadata = db.Column(db.Text)  # JSON string with device/GPS metadata
@@ -194,9 +207,193 @@ class Lecture(db.Model):
         
         return info
     
+    def set_rectangular_boundary(self, ne_corner, nw_corner, se_corner, sw_corner, 
+                                gps_threshold=20, tolerance=2.0):
+        """
+        Set rectangular boundary for lecture
+        
+        Args:
+            ne_corner: (lat, lon) tuple for northeast corner
+            nw_corner: (lat, lon) tuple for northwest corner
+            se_corner: (lat, lon) tuple for southeast corner
+            sw_corner: (lat, lon) tuple for southwest corner
+            gps_threshold: GPS accuracy threshold in meters
+            tolerance: Edge tolerance in meters
+        """
+        import json
+        from utils.rectangular_geofence import RectangularBoundary
+        
+        # Create and validate boundary
+        boundary = RectangularBoundary(ne_corner, nw_corner, se_corner, sw_corner)
+        
+        # Store boundary data
+        self.geofence_type = 'rectangular'
+        self.boundary_coordinates = json.dumps(boundary.to_dict())
+        self.boundary_area_sqm = boundary.calculate_area()
+        self.boundary_perimeter_m = boundary.calculate_perimeter()
+        
+        center = boundary.get_center()
+        self.boundary_center_lat = center[0]
+        self.boundary_center_lon = center[1]
+        
+        # Also update center point for backward compatibility
+        self.latitude = center[0]
+        self.longitude = center[1]
+        
+        # Set thresholds
+        self.gps_accuracy_threshold = gps_threshold
+        self.boundary_tolerance_m = tolerance
+        
+        # Set metadata
+        self.boundary_validation_method = 'point_in_polygon'
+        self.boundary_created_at = datetime.now(IST)
+        self.boundary_last_modified = datetime.now(IST)
+        
+        db.session.commit()
+    
+    def get_boundary(self):
+        """
+        Get boundary object (rectangular or circular)
+        
+        Returns:
+            RectangularBoundary object or None
+        """
+        if self.geofence_type == 'rectangular' and self.boundary_coordinates:
+            import json
+            from utils.rectangular_geofence import RectangularBoundary
+            
+            try:
+                data = json.loads(self.boundary_coordinates)
+                return RectangularBoundary.from_dict(data)
+            except Exception as e:
+                print(f"Error loading boundary: {e}")
+                return None
+        
+        return None
+    
+    def convert_circular_to_rectangular(self):
+        """
+        Convert circular geofence to rectangular approximation
+        
+        Returns:
+            Dictionary with suggested boundary
+        """
+        from utils.rectangular_geofence import RectangularBoundary
+        
+        if not self.latitude or not self.longitude or not self.geofence_radius:
+            raise ValueError("Circular geofence not properly configured")
+        
+        # Create rectangular approximation
+        boundary = RectangularBoundary.from_circular(
+            self.latitude,
+            self.longitude,
+            self.geofence_radius
+        )
+        
+        return {
+            'suggested_boundary': boundary.to_dict(),
+            'original_circular': {
+                'center': (self.latitude, self.longitude),
+                'radius': self.geofence_radius,
+                'area_sqm': 3.14159 * (self.geofence_radius ** 2)
+            }
+        }
+    
+    def get_geofence_type(self):
+        """Get geofence type"""
+        return self.geofence_type or 'circular'
+    
+    def is_within_geofence_enhanced(self, student_lat, student_lon, gps_accuracy=None):
+        """
+        Enhanced geofence check supporting both circular and rectangular boundaries
+        
+        Args:
+            student_lat: Student latitude
+            student_lon: Student longitude
+            gps_accuracy: GPS accuracy in meters (optional)
+        
+        Returns:
+            Dictionary with validation results
+        """
+        try:
+            if self.geofence_type == 'rectangular':
+                # Use rectangular boundary validation
+                from utils.rectangular_geofence import (
+                    point_in_rectangular_boundary,
+                    apply_tolerance_buffer,
+                    validate_gps_accuracy
+                )
+                
+                boundary = self.get_boundary()
+                if not boundary:
+                    # Fallback to circular
+                    return self._validate_circular(student_lat, student_lon)
+                
+                # Validate GPS accuracy if provided
+                if gps_accuracy:
+                    gps_result = validate_gps_accuracy(
+                        gps_accuracy,
+                        self.gps_accuracy_threshold or 20,
+                        student_lat,
+                        student_lon,
+                        boundary
+                    )
+                    
+                    if not gps_result['acceptable'] and gps_result['reason'].startswith('gps_accuracy_exceeds'):
+                        return {
+                            'within_geofence': False,
+                            'method': 'rectangular',
+                            'reason': 'gps_accuracy_too_low',
+                            'gps_accuracy': gps_accuracy,
+                            'threshold': self.gps_accuracy_threshold,
+                            'details': gps_result
+                        }
+                
+                # Apply tolerance buffer
+                tolerance_result = apply_tolerance_buffer(
+                    student_lat,
+                    student_lon,
+                    boundary,
+                    self.boundary_tolerance_m or 2.0,
+                    gps_accuracy or 999
+                )
+                
+                return {
+                    'within_geofence': tolerance_result['accepted'],
+                    'method': 'rectangular',
+                    'reason': tolerance_result['reason'],
+                    'distance_to_edge': tolerance_result.get('distance_to_edge', 0),
+                    'tolerance_applied': tolerance_result.get('applied_tolerance', False),
+                    'details': tolerance_result
+                }
+                
+            else:
+                # Use circular validation
+                return self._validate_circular(student_lat, student_lon)
+                
+        except Exception as e:
+            # Fallback to circular validation
+            print(f"Error in enhanced geofence check: {e}")
+            return self._validate_circular(student_lat, student_lon)
+    
+    def _validate_circular(self, student_lat, student_lon):
+        """Fallback circular validation"""
+        within_fence, distance = is_within_geofence(
+            student_lat, student_lon,
+            self.latitude, self.longitude,
+            self.geofence_radius
+        )
+        
+        return {
+            'within_geofence': within_fence,
+            'method': 'circular',
+            'distance': distance,
+            'radius': self.geofence_radius
+        }
+    
     def to_dict(self):
         """Convert lecture to dictionary"""
-        return {
+        base_dict = {
             'id': self.id,
             'course_id': self.course_id,
             'course_name': self.course.name if self.course else None,
@@ -209,6 +406,7 @@ class Lecture(db.Model):
             'longitude': self.longitude,
             'location_name': self.location_name,
             'geofence_radius': self.geofence_radius,
+            'geofence_type': self.geofence_type,
             'scheduled_start': self.scheduled_start.isoformat() if self.scheduled_start else None,
             'scheduled_end': self.scheduled_end.isoformat() if self.scheduled_end else None,
             'actual_start': self.actual_start.isoformat() if self.actual_start else None,
@@ -222,6 +420,20 @@ class Lecture(db.Model):
             'attendance_stats': self.get_attendance_stats(),
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+        
+        # Add rectangular boundary info if applicable
+        if self.geofence_type == 'rectangular' and self.boundary_coordinates:
+            import json
+            try:
+                base_dict['boundary'] = json.loads(self.boundary_coordinates)
+                base_dict['boundary_area_sqm'] = self.boundary_area_sqm
+                base_dict['boundary_perimeter_m'] = self.boundary_perimeter_m
+                base_dict['gps_accuracy_threshold'] = self.gps_accuracy_threshold
+                base_dict['boundary_tolerance_m'] = self.boundary_tolerance_m
+            except:
+                pass
+        
+        return base_dict
     
     def __repr__(self):
         return f'<Lecture {self.title} - {self.course.code if self.course else "Unknown"}>'

@@ -1,0 +1,221 @@
+{
+  "timestamp": "2025-11-19T20:52:51.680158",
+  "tests": [
+    {
+      "name": "Environment: SECRET_KEY",
+      "status": "passed",
+      "message": "Secret key configured",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.680822"
+    },
+    {
+      "name": "Environment: DATABASE_URL",
+      "status": "passed",
+      "message": "Supabase database configured",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.680890"
+    },
+    {
+      "name": "Environment: GOOGLE_MAPS_API_KEY",
+      "status": "passed",
+      "message": "API key configured (AIzaSyBv45hZBceK-t7d...)",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.680988"
+    },
+    {
+      "name": "File: Enhanced GPS module",
+      "status": "passed",
+      "message": "static/js/enhanced_gps.js exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.681559"
+    },
+    {
+      "name": "File: Hybrid location system",
+      "status": "passed",
+      "message": "static/js/hybrid_location.js exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.681748"
+    },
+    {
+      "name": "File: Teacher create lecture template",
+      "status": "passed",
+      "message": "templates/teacher/create_lecture_enhanced.html exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.681850"
+    },
+    {
+      "name": "File: Student dashboard template",
+      "status": "passed",
+      "message": "templates/student/dashboard.html exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.681955"
+    },
+    {
+      "name": "File: Rectangular geofence utilities",
+      "status": "passed",
+      "message": "utils/rectangular_geofence.py exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.682109"
+    },
+    {
+      "name": "File: Lecture model",
+      "status": "passed",
+      "message": "models/lecture.py exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.682200"
+    },
+    {
+      "name": "File: Attendance model",
+      "status": "passed",
+      "message": "models/attendance.py exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.682307"
+    },
+    {
+      "name": "File: Teacher routes",
+      "status": "passed",
+      "message": "routes/teacher.py exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.682412"
+    },
+    {
+      "name": "File: Student routes",
+      "status": "passed",
+      "message": "routes/student.py exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.682538"
+    },
+    {
+      "name": "File: Configuration file",
+      "status": "passed",
+      "message": "config.py exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.682679"
+    },
+    {
+      "name": "File: Environment variables",
+      "status": "passed",
+      "message": ".env exists",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:51.682825"
+    },
+    {
+      "name": "Import: Flask",
+      "status": "passed",
+      "message": "Flask 2.3.3",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:52.026237"
+    },
+    {
+      "name": "Import: SQLAlchemy",
+      "status": "passed",
+      "message": "SQLAlchemy 2.0.44",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:52.480431"
+    },
+    {
+      "name": "Import: Flask-Login",
+      "status": "passed",
+      "message": "Flask-Login available",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:52.492488"
+    },
+    {
+      "name": "Import: Requests",
+      "status": "passed",
+      "message": "Requests 2.31.0",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:52.647017"
+    },
+    {
+      "name": "Google API: Connection",
+      "status": "failed",
+      "message": "API key invalid or restricted. Enable Geolocation API in Google Cloud Console",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:53.517060"
+    },
+    {
+      "name": "Database: Connection",
+      "status": "passed",
+      "message": "Successfully connected to database",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:54.208152"
+    },
+    {
+      "name": "Database: Tables",
+      "status": "passed",
+      "message": "All required tables exist (6 total)",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:54.867653"
+    },
+    {
+      "name": "Geofence: Boundary Creation",
+      "status": "passed",
+      "message": "Created 30m\u00d730m boundary, Area: 899.1m\u00b2",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:54.875900"
+    },
+    {
+      "name": "Geofence: Point Inside",
+      "status": "passed",
+      "message": "Center point correctly identified as inside",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:54.876650"
+    },
+    {
+      "name": "Geofence: Point Outside",
+      "status": "passed",
+      "message": "Far point correctly identified as outside",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:54.877327"
+    },
+    {
+      "name": "App: Creation",
+      "status": "passed",
+      "message": "Flask app created successfully",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:56.643115"
+    },
+    {
+      "name": "App: Routes",
+      "status": "passed",
+      "message": "79 routes registered",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:56.674484"
+    },
+    {
+      "name": "JavaScript: HybridLocationSystem",
+      "status": "passed",
+      "message": "Class defined",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:56.689866"
+    },
+    {
+      "name": "JavaScript: Google API Integration",
+      "status": "passed",
+      "message": "Method defined",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:56.690029"
+    },
+    {
+      "name": "JavaScript: EnhancedGPS",
+      "status": "passed",
+      "message": "Class defined",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:56.690538"
+    },
+    {
+      "name": "JavaScript: Kalman Filter",
+      "status": "passed",
+      "message": "Class defined",
+      "details": null,
+      "timestamp": "2025-11-19T20:52:56.690720"
+    }
+  ],
+  "summary": {
+    "total": 30,
+    "passed": 29,
+    "failed": 1,
+    "skipped": 0
+  }
+}

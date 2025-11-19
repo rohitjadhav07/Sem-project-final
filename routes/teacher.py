@@ -117,6 +117,11 @@ def create_lecture():
             # Get client IP address
             client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
             
+            # Parse boundary dimensions
+            boundary_width = float(data.get('boundary_width', 30))  # meters (East-West)
+            boundary_height = float(data.get('boundary_height', 30))  # meters (North-South)
+            gps_threshold = int(data.get('gps_accuracy_threshold', 20))
+            
             # Create lecture with enhanced location data
             lecture = Lecture(
                 title=data['title'],
@@ -128,7 +133,9 @@ def create_lecture():
                 latitude=round(latitude, 8),  # Precision to ~1mm
                 longitude=round(longitude, 8),  # Precision to ~1mm
                 location_name=data.get('location_name', ''),
-                geofence_radius=int(data.get('geofence_radius', 50)),
+                geofence_type='rectangular',
+                gps_accuracy_threshold=gps_threshold,
+                boundary_tolerance_m=2.0,
                 location_accuracy=accuracy,
                 location_metadata=location_metadata,
                 location_set_at=datetime.now(IST),
@@ -147,10 +154,30 @@ def create_lecture():
             lecture.location_hash = hashlib.sha256(location_string.encode()).hexdigest()
             
             db.session.add(lecture)
+            db.session.flush()  # Get lecture ID
+            
+            # Calculate rectangular boundary corners from center point and dimensions
+            from utils.rectangular_geofence import RectangularBoundary
+            
+            # Create boundary from center and dimensions
+            boundary = RectangularBoundary.from_center_and_dimensions(
+                latitude, longitude, boundary_width, boundary_height
+            )
+            
+            # Set the boundary on the lecture
+            lecture.set_rectangular_boundary(
+                boundary.ne_corner,
+                boundary.nw_corner,
+                boundary.se_corner,
+                boundary.sw_corner,
+                gps_threshold=gps_threshold,
+                tolerance=2.0
+            )
+            
             db.session.commit()
             
             # Success message with location details
-            success_msg = f'Lecture created successfully!'
+            success_msg = f'Lecture created with {boundary_width}m × {boundary_height}m rectangular boundary!'
             if accuracy:
                 success_msg += f' Location accuracy: ±{accuracy:.1f}m'
             
@@ -165,33 +192,6 @@ def create_lecture():
     # GET request - show form
     courses = Course.query.filter_by(teacher_id=current_user.id).all()
     return render_template('teacher/create_lecture_enhanced.html', courses=courses)
-
-@teacher_bp.route('/lectures/create-simple', methods=['GET', 'POST'])
-def create_lecture_simple():
-    """Simple lecture creation (fallback)"""
-    if request.method == 'POST':
-        data = request.form
-        lecture = Lecture(
-            title=data['title'],
-            description=data.get('description', ''),
-            course_id=data['course_id'],
-            teacher_id=current_user.id,
-            scheduled_start=datetime.fromisoformat(data['scheduled_start']),
-            scheduled_end=datetime.fromisoformat(data['scheduled_end']),
-            latitude=float(data['latitude']),
-            longitude=float(data['longitude']),
-            location_name=data.get('location_name', ''),
-            geofence_radius=int(data.get('geofence_radius', 50))
-        )
-        
-        db.session.add(lecture)
-        db.session.commit()
-        flash('Lecture created successfully!', 'success')
-        return redirect(url_for('teacher.lectures'))
-    
-    courses = Course.query.filter_by(teacher_id=current_user.id).all()
-    return render_template('teacher/create_lecture.html', courses=courses)
-
 @teacher_bp.route('/lecture/<int:lecture_id>')
 def lecture_detail(lecture_id):
     """Lecture detail page"""
@@ -729,3 +729,279 @@ def api_lecture_location_details(lecture_id):
         
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
+
+
+
+# ============================================================================
+# RECTANGULAR BOUNDARY API ENDPOINTS
+# ============================================================================
+
+@teacher_bp.route('/api/lecture/<int:lecture_id>/set-rectangular-boundary', methods=['POST'])
+@login_required
+@teacher_required
+def set_rectangular_boundary(lecture_id):
+    """
+    Set rectangular boundary for a lecture
+    
+    POST /teacher/api/lecture/<id>/set-rectangular-boundary
+    Body: {
+        "geofence_type": "rectangular",
+        "corners": {
+            "ne": {"lat": 40.7128, "lon": -74.0060},
+            "nw": {"lat": 40.7128, "lon": -74.0070},
+            "se": {"lat": 40.7120, "lon": -74.0060},
+            "sw": {"lat": 40.7120, "lon": -74.0070}
+        },
+        "gps_accuracy_threshold": 20,
+        "tolerance_m": 2.0
+    }
+    """
+    try:
+        lecture = Lecture.query.filter_by(id=lecture_id, teacher_id=current_user.id).first()
+        
+        if not lecture:
+            return jsonify({
+                'success': False,
+                'error': 'Lecture not found or access denied'
+            }), 404
+        
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No data provided'
+            }), 400
+        
+        # Extract corners
+        corners = data.get('corners', {})
+        ne = corners.get('ne', {})
+        nw = corners.get('nw', {})
+        se = corners.get('se', {})
+        sw = corners.get('sw', {})
+        
+        # Validate corners
+        required_corners = ['ne', 'nw', 'se', 'sw']
+        for corner_name in required_corners:
+            corner = corners.get(corner_name, {})
+            if 'lat' not in corner or 'lon' not in corner:
+                return jsonify({
+                    'success': False,
+                    'error': f'Missing lat/lon for {corner_name} corner'
+                }), 400
+        
+        # Convert to tuples
+        ne_corner = (float(ne['lat']), float(ne['lon']))
+        nw_corner = (float(nw['lat']), float(nw['lon']))
+        se_corner = (float(se['lat']), float(se['lon']))
+        sw_corner = (float(sw['lat']), float(sw['lon']))
+        
+        # Get thresholds
+        gps_threshold = int(data.get('gps_accuracy_threshold', 20))
+        tolerance = float(data.get('tolerance_m', 2.0))
+        
+        # Set rectangular boundary
+        lecture.set_rectangular_boundary(
+            ne_corner, nw_corner, se_corner, sw_corner,
+            gps_threshold, tolerance
+        )
+        
+        # Get boundary for response
+        boundary = lecture.get_boundary()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Rectangular boundary set successfully',
+            'boundary': {
+                'area_sqm': round(lecture.boundary_area_sqm, 2),
+                'perimeter_m': round(lecture.boundary_perimeter_m, 2),
+                'center': {
+                    'lat': lecture.boundary_center_lat,
+                    'lon': lecture.boundary_center_lon
+                }
+            },
+            'validation': {
+                'is_valid_rectangle': True,
+                'alignment_check': 'passed',
+                'warnings': []
+            }
+        }), 200
+        
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'validation': {
+                'is_valid_rectangle': False,
+                'alignment_check': 'failed'
+            }
+        }), 400
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }), 500
+
+
+@teacher_bp.route('/api/lecture/<int:lecture_id>/convert-to-rectangular', methods=['POST'])
+@login_required
+@teacher_required
+def convert_to_rectangular(lecture_id):
+    """
+    Convert circular geofence to rectangular boundary
+    
+    POST /teacher/api/lecture/<id>/convert-to-rectangular
+    Body: {
+        "conversion_method": "square_approximation"
+    }
+    """
+    try:
+        lecture = Lecture.query.filter_by(id=lecture_id, teacher_id=current_user.id).first()
+        
+        if not lecture:
+            return jsonify({
+                'success': False,
+                'error': 'Lecture not found or access denied'
+            }), 404
+        
+        # Get conversion suggestion
+        conversion_data = lecture.convert_circular_to_rectangular()
+        
+        return jsonify({
+            'success': True,
+            'suggested_boundary': conversion_data['suggested_boundary'],
+            'original_circular': conversion_data['original_circular']
+        }), 200
+        
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }), 500
+
+
+@teacher_bp.route('/api/lecture/<int:lecture_id>/boundary-preview', methods=['GET'])
+@login_required
+@teacher_required
+def boundary_preview(lecture_id):
+    """
+    Get boundary preview data for map visualization
+    
+    GET /teacher/api/lecture/<id>/boundary-preview
+    """
+    try:
+        lecture = Lecture.query.filter_by(id=lecture_id, teacher_id=current_user.id).first()
+        
+        if not lecture:
+            return jsonify({
+                'success': False,
+                'error': 'Lecture not found or access denied'
+            }), 404
+        
+        response_data = {
+            'success': True,
+            'geofence_type': lecture.geofence_type or 'circular',
+            'lecture_id': lecture.id,
+            'lecture_title': lecture.title
+        }
+        
+        if lecture.geofence_type == 'rectangular' and lecture.boundary_coordinates:
+            import json
+            boundary_data = json.loads(lecture.boundary_coordinates)
+            
+            response_data['boundary'] = boundary_data
+            response_data['visualization_data'] = {
+                'map_center': {
+                    'lat': lecture.boundary_center_lat,
+                    'lon': lecture.boundary_center_lon
+                },
+                'zoom_level': 18,
+                'area_sqm': lecture.boundary_area_sqm,
+                'perimeter_m': lecture.boundary_perimeter_m
+            }
+        else:
+            # Circular geofence
+            response_data['circular'] = {
+                'center': {
+                    'lat': lecture.latitude,
+                    'lon': lecture.longitude
+                },
+                'radius': lecture.geofence_radius
+            }
+            response_data['visualization_data'] = {
+                'map_center': {
+                    'lat': lecture.latitude,
+                    'lon': lecture.longitude
+                },
+                'zoom_level': 17
+            }
+        
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }), 500
+
+
+@teacher_bp.route('/api/lecture/<int:lecture_id>/location-details', methods=['GET'])
+@login_required
+@teacher_required
+def get_location_details(lecture_id):
+    """
+    Get detailed location information for a lecture
+    """
+    try:
+        lecture = Lecture.query.filter_by(id=lecture_id, teacher_id=current_user.id).first()
+        
+        if not lecture:
+            return jsonify({
+                'success': False,
+                'error': 'Lecture not found or access denied'
+            }), 404
+        
+        details = {
+            'success': True,
+            'lecture_id': lecture.id,
+            'geofence_type': lecture.geofence_type or 'circular',
+            'gps_accuracy_threshold': lecture.gps_accuracy_threshold or 20,
+            'location_locked': lecture.location_locked,
+            'location_accuracy': lecture.location_accuracy
+        }
+        
+        if lecture.geofence_type == 'rectangular':
+            details['rectangular'] = {
+                'area_sqm': lecture.boundary_area_sqm,
+                'perimeter_m': lecture.boundary_perimeter_m,
+                'center': {
+                    'lat': lecture.boundary_center_lat,
+                    'lon': lecture.boundary_center_lon
+                },
+                'tolerance_m': lecture.boundary_tolerance_m,
+                'created_at': lecture.boundary_created_at.isoformat() if lecture.boundary_created_at else None
+            }
+        else:
+            details['circular'] = {
+                'center': {
+                    'lat': lecture.latitude,
+                    'lon': lecture.longitude
+                },
+                'radius': lecture.geofence_radius
+            }
+        
+        return jsonify(details), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }), 500
