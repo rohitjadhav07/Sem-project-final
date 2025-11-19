@@ -345,10 +345,12 @@ def api_checkin():
             })
         
         # Use enhanced geofence validation (supports both circular and rectangular)
+        # If smart validation approved (student < 10m), skip GPS accuracy check in boundary validation
+        skip_gps_check = distance_from_center < 10
         validation_result = lecture.is_within_geofence_enhanced(
             float(student_lat),
             float(student_lon),
-            gps_accuracy
+            gps_accuracy if not skip_gps_check else None  # Pass None to skip GPS check
         )
         
         if not validation_result['within_geofence']:

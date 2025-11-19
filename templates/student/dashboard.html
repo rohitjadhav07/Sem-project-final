@@ -375,7 +375,8 @@
 
             // Auto check-in if within range
             if (isWithinRange) {
-                console.log(`Auto check-in triggered for ${lecture.title} - Within ${geofenceType} boundary`);
+                console.log(`🎯 Auto check-in triggered for ${lecture.title} - Within ${geofenceType} boundary`);
+                showNotification(`🎯 Auto check-in detected for ${lecture.title}...`, 'info');
                 performAutoCheckIn(lecture.id);
             }
         });
@@ -437,22 +438,37 @@
                 lecture_id: lectureId,
                 latitude: currentUserLocation.coords.latitude,
                 longitude: currentUserLocation.coords.longitude,
-                auto_checkin: true
+                auto_checkin: true,
+                metadata: {
+                    accuracy: currentUserLocation.coords.accuracy || 999,
+                    altitude: currentUserLocation.coords.altitude,
+                    heading: currentUserLocation.coords.heading,
+                    speed: currentUserLocation.coords.speed
+                }
             })
         })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showNotification(`✅ Checked in successfully! Distance: ${Math.round(data.distance)}m`, 'success');
+                    const distanceInfo = data.validation && data.validation.distance_from_center 
+                        ? `${Math.round(data.validation.distance_from_center)}m from center` 
+                        : '';
+                    const smartValidation = data.validation && data.validation.smart_validation_used 
+                        ? ' (Smart validation)' 
+                        : '';
+                    showNotification(`✅ Auto check-in successful! ${distanceInfo}${smartValidation}`, 'success');
                     refreshLectures(); // Refresh to update display
                 } else {
                     checkedInLectures.delete(lectureId); // Allow retry
-                    console.error('Check-in failed:', data.message);
+                    console.error('Auto check-in failed:', data.message);
+                    // Show error notification
+                    showNotification(`⚠️ Auto check-in failed: ${data.message}`, 'warning');
                 }
             })
             .catch(error => {
                 checkedInLectures.delete(lectureId); // Allow retry
-                console.error('Check-in error:', error);
+                console.error('Auto check-in error:', error);
+                showNotification(`❌ Auto check-in error: ${error.message}`, 'danger');
             });
     }
 
