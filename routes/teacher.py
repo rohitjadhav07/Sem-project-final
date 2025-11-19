@@ -104,10 +104,14 @@ def create_lecture():
                 except:
                     pass
             
-            # Check accuracy requirements
+            # Check accuracy requirements (relaxed for teacher location setup)
             min_accuracy_required = int(data.get('min_accuracy_required', 20))
-            if accuracy and accuracy > min_accuracy_required:
-                flash(f'Warning: GPS accuracy (±{accuracy:.1f}m) exceeds required accuracy (±{min_accuracy_required}m)', 'warning')
+            if accuracy and accuracy > 100:
+                # Only warn if accuracy is very poor (>100m)
+                flash(f'Warning: GPS accuracy (±{accuracy:.1f}m) is poor. Location may not be precise.', 'warning')
+            elif accuracy and accuracy > min_accuracy_required:
+                # Just log it, don't block
+                print(f'GPS accuracy (±{accuracy:.1f}m) exceeds target (±{min_accuracy_required}m) but allowing')
             
             # Generate location hash for integrity verification
             import hashlib
@@ -166,10 +170,10 @@ def create_lecture():
             
             # Set the boundary on the lecture
             lecture.set_rectangular_boundary(
-                boundary.ne_corner,
-                boundary.nw_corner,
-                boundary.se_corner,
-                boundary.sw_corner,
+                boundary.ne,
+                boundary.nw,
+                boundary.se,
+                boundary.sw,
                 gps_threshold=gps_threshold,
                 tolerance=2.0
             )

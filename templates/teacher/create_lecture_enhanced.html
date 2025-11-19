@@ -303,22 +303,62 @@ let locationHistory = [];
 
 function getCurrentLocation() {
     if (navigator.geolocation) {
-        showLocationStatus('Getting current location...');
+        showLocationStatus('📍 Getting location... Please wait.');
         
-        const options = {
-            enableHighAccuracy: false,
-            timeout: 15000,
-            maximumAge: 300000  // 5 minutes
-        };
+        let bestPosition = null;
+        let attempts = 0;
+        const maxAttempts = 5;
         
-        navigator.geolocation.getCurrentPosition(function(position) {
-            setLocationData(position, 'standard');
-            showLocationAccuracy(position.coords.accuracy);
-            hideLocationStatus();
-        }, function(error) {
-            hideLocationStatus();
-            handleLocationError(error);
-        }, options);
+        function tryGetLocation() {
+            attempts++;
+            showLocationStatus(`📍 Getting location (attempt ${attempts}/${maxAttempts})...`);
+            
+            const options = {
+                enableHighAccuracy: true,  // Use high accuracy
+                timeout: 10000,
+                maximumAge: 0  // Don't use cached position
+            };
+            
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    console.log(`GPS reading ${attempts}: ±${Math.round(position.coords.accuracy)}m`);
+                    
+                    // Keep best reading
+                    if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+                        bestPosition = position;
+                    }
+                    
+                    // If good enough (< 30m), use it
+                    if (position.coords.accuracy <= 30) {
+                        setLocationData(bestPosition, 'standard');
+                        showLocationAccuracy(bestPosition.coords.accuracy);
+                        hideLocationStatus();
+                        return;
+                    }
+                    
+                    // Try again if not good enough
+                    if (attempts < maxAttempts) {
+                        setTimeout(tryGetLocation, 2000);  // Wait 2 seconds between attempts
+                    } else {
+                        // Use best we got
+                        setLocationData(bestPosition, 'standard');
+                        showLocationAccuracy(bestPosition.coords.accuracy);
+                        hideLocationStatus();
+                    }
+                },
+                function(error) {
+                    if (attempts < maxAttempts) {
+                        setTimeout(tryGetLocation, 2000);
+                    } else {
+                        hideLocationStatus();
+                        handleLocationError(error);
+                    }
+                },
+                options
+            );
+        }
+        
+        tryGetLocation();
     } else {
         alert('Geolocation is not supported by this browser.');
     }
@@ -330,70 +370,102 @@ function getHighAccuracyLocation() {
         return;
     }
     
-    showLocationStatus('🎯 Starting hybrid location system...');
+    showLocationStatus('🛰️ Starting high accuracy GPS... Please stay still.');
     locationCaptureAttempts = 0;
     bestAccuracy = null;
     
-    // Initialize hybrid location system
-    const hybridLocation = new HybridLocationSystem({
-        googleApiKey: '{{ config.GOOGLE_MAPS_API_KEY if config.GOOGLE_MAPS_API_KEY else "" }}',
-        targetAccuracy: 20,      // Target 20m accuracy
-        gpsTimeout: 30000,       // 30 second GPS timeout
-        googleTimeout: 10000     // 10 second Google API timeout
-    });
+    let bestPosition = null;
+    let attempts = 0;
+    const maxAttempts = 10;  // More attempts for better accuracy
+    const targetAccuracy = 20;  // Target 20m
     
-    // Start hybrid location acquisition
-    hybridLocation.getLocation(
-        // Success callback
-        (position) => {
-            const accuracy = Math.round(position.coords.accuracy);
-            const method = position.method;
-            
-            let methodName = 'GPS';
-            if (method === 'google_wifi') methodName = 'WiFi Positioning';
-            else if (method === 'gps_wifi') methodName = 'GPS + WiFi';
-            else if (method === 'gps_fallback') methodName = 'GPS (reduced accuracy)';
-            
-            if (position.lowAccuracy) {
-                showLocationWarning(`⚠️ Location captured with reduced accuracy: ±${accuracy}m (${methodName})`);
+    function tryHighAccuracy() {
+        attempts++;
+        showLocationStatus(`🛰️ High accuracy GPS (reading ${attempts}/${maxAttempts})... Best so far: ${bestPosition ? '±' + Math.round(bestPosition.coords.accuracy) + 'm' : 'waiting...'}`);
+        
+        const options = {
+            enableHighAccuracy: true,  // Force high accuracy mode
+            timeout: 15000,
+            maximumAge: 0  // Always get fresh reading
+        };
+        
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                console.log(`High accuracy reading ${attempts}: ±${Math.round(position.coords.accuracy)}m`);
                 
-                // Show option to retry or use manual entry
-                const statusDiv = document.getElementById('locationStatus');
-                statusDiv.innerHTML += `
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-warning me-2" onclick="getHighAccuracyLocation()">
-                            <i class="fas fa-redo"></i> Retry
-                        </button>
-                        <button class="btn btn-sm btn-info" onclick="showManualEntry()">
-                            <i class="fas fa-edit"></i> Enter Manually
-                        </button>
-                    </div>
-                `;
-            } else {
-                showLocationSuccess(`✅ High accuracy location captured! ±${accuracy}m (${methodName})`);
-            }
-            
-            setLocationData(position, method);
-        },
-        
-        // Error callback
-        (error) => {
-            hideLocationStatus();
-            showLocationWarning('❌ Automatic positioning failed. Please enter location manually.');
-            showManualEntry();
-        },
-        
-        // Progress callback
-        (progress) => {
-            let icon = '🔄';
-            if (progress.stage === 'method1') icon = '🛰️';
-            else if (progress.stage === 'method2') icon = '📶';
-            else if (progress.stage === 'method3') icon = '⚠️';
-            else if (progress.stage === 'manual') icon = '✏️';
-            
-            showLocationStatus(`${icon} ${progress.message}`);
-        }
-    );
+                // Keep best reading
+                if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+                    bestPosition = position;
+                    showLocationStatus(`🛰️ Improving... Best: ±${Math.round(bestPosition.coords.accuracy)}m (reading ${attempts}/${maxAttempts})`);
+                }
+                
+                // If excellent accuracy (< 15m), use it immediately
+                if (position.coords.accuracy <= 15) {
+                    setLocationData(bestPosition, 'high_accuracy_gps');
+                    showLocationSuccess(`✅ Excellent accuracy! ±${Math.round(bestPosition.coords.accuracy)}m`);
+                    return;
+                }
+                
+                // If good accuracy (< 30m) and we've tried enough, use it
+                if (position.coords.accuracy <= 30 && attempts >= 5) {
+                    setLocationData(bestPosition, 'high_accuracy_gps');
+                    showLocationSuccess(`✅ Good accuracy achieved! ±${Math.round(bestPosition.coords.accuracy)}m`);
+                    return;
+                }
+                
+                // Continue trying if not good enough
+                if (attempts < maxAttempts) {
+                    setTimeout(tryHighAccuracy, 1500);  // Wait 1.5 seconds between attempts
+                } else {
+                    // Use best we got, even if not perfect
+                    if (bestPosition) {
+                        setLocationData(bestPosition, 'high_accuracy_gps');
+                        
+                        if (bestPosition.coords.accuracy <= 50) {
+                            showLocationWarning(`⚠️ Moderate accuracy: ±${Math.round(bestPosition.coords.accuracy)}m. You can retry or use manual entry.`);
+                        } else {
+                            showLocationWarning(`⚠️ Poor accuracy: ±${Math.round(bestPosition.coords.accuracy)}m. Consider using manual entry.`);
+                        }
+                        
+                        // Show retry and manual entry options
+                        const statusDiv = document.getElementById('locationStatus');
+                        statusDiv.innerHTML += `
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-warning me-2" onclick="getHighAccuracyLocation()">
+                                    <i class="fas fa-redo"></i> Retry
+                                </button>
+                                <button class="btn btn-sm btn-info" onclick="showManualEntry()">
+                                    <i class="fas fa-edit"></i> Enter Manually
+                                </button>
+                            </div>
+                        `;
+                    } else {
+                        showLocationWarning('❌ Could not get GPS location. Please use manual entry.');
+                        showManualEntry();
+                    }
+                }
+            },
+            function(error) {
+                console.error(`GPS attempt ${attempts} failed:`, error.message);
+                
+                if (attempts < maxAttempts) {
+                    setTimeout(tryHighAccuracy, 2000);
+                } else {
+                    if (bestPosition) {
+                        setLocationData(bestPosition, 'high_accuracy_gps');
+                        showLocationWarning(`⚠️ Best available: ±${Math.round(bestPosition.coords.accuracy)}m`);
+                    } else {
+                        hideLocationStatus();
+                        showLocationWarning('❌ GPS failed. Please use manual entry.');
+                        showManualEntry();
+                    }
+                }
+            },
+            options
+        );
+    }
+    
+    tryHighAccuracy();
 }
 
 // Show manual location entry
